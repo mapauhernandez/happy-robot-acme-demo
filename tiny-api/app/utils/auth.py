@@ -17,11 +17,12 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
         api_key: str,
         excluded_paths: Optional[Iterable[str]] = None,
     ) -> None:
-        if not api_key:
+        normalized_key = api_key.strip()
+        if not normalized_key:
             raise RuntimeError("APP_API_KEY environment variable is required for API key authentication.")
 
         super().__init__(app)
-        self._api_key = api_key
+        self._api_key = normalized_key
         self._excluded_paths: Set[str] = set(excluded_paths or set())
 
     async def dispatch(self, request: Request, call_next):  # type: ignore[override]
@@ -30,8 +31,14 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         provided_key = request.headers.get("x-api-key")
+        if provided_key is not None:
+            provided_key = provided_key.strip()
+
+        if not provided_key:
+            return JSONResponse(status_code=403, content={"error": "Forbidden: API key missing."})
+
         if provided_key != self._api_key:
-            return JSONResponse(status_code=403, content={"error": "Forbidden"})
+            return JSONResponse(status_code=403, content={"error": "Forbidden: Invalid API key."})
 
         return await call_next(request)
 
