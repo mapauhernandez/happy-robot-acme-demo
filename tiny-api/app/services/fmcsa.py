@@ -184,19 +184,10 @@ def _find_carrier_block(payload: Any) -> Optional[Dict[str, Any]]:
 
 
 def _parse_carrier_payload(payload: Dict[str, Any], mc: str) -> CarrierRecord:
-    print("[FMCSA] Parsing carrier payload...")
-    if isinstance(payload, dict):
-        print(f"[FMCSA] Top-level payload keys: {list(payload.keys())}")
     carrier_block = _find_carrier_block(payload.get("content") or payload)
 
     if not isinstance(carrier_block, dict) or not carrier_block:
         raise CarrierNotFoundError(f"No carrier details available for MC {mc}.")
-
-    print("[FMCSA] Carrier block located:")
-    try:
-        print(json.dumps(carrier_block, indent=2))
-    except TypeError:
-        print(carrier_block)
 
     dot_number = _extract_str(
         carrier_block.get("usdotNumber")
@@ -204,18 +195,14 @@ def _parse_carrier_payload(payload: Dict[str, Any], mc: str) -> CarrierRecord:
         or carrier_block.get("dotNumber")
         or carrier_block.get("US_DOT")
     )
-    print(f"[FMCSA] Extracted DOT number: {dot_number}")
     carrier_name = _extract_str(
         carrier_block.get("legalName")
         or carrier_block.get("carrierName")
         or carrier_block.get("dbaName")
     )
-    print(f"[FMCSA] Extracted carrier name: {carrier_name}")
     authority_status = _normalize_authority_status(carrier_block)
-    print(f"[FMCSA] Extracted authority status: {authority_status}")
 
     eligible = _determine_eligibility(carrier_block, authority_status)
-    print(f"[FMCSA] Eligible: {eligible}")
 
     return CarrierRecord(
         mc=mc,
@@ -240,10 +227,6 @@ async def fetch_carrier_by_mc(mc: str, web_key: str) -> CarrierRecord:
         except httpx.HTTPError as exc:  # pragma: no cover - network failures
             raise FmcsaServiceError("Failed to reach FMCSA service.") from exc
 
-    sanitized_url = url.replace(web_key, "***")
-    print(f"[FMCSA] Request URL: {sanitized_url}")
-    print(f"[FMCSA] Response status: {response.status_code}")
-
     if response.status_code == 404:
         raise CarrierNotFoundError(f"No carrier found for MC {mc}.")
 
@@ -254,12 +237,6 @@ async def fetch_carrier_by_mc(mc: str, web_key: str) -> CarrierRecord:
         data: Dict[str, Any] = response.json()
     except json.JSONDecodeError as exc:
         raise FmcsaServiceError("FMCSA response was not valid JSON.") from exc
-
-    print("[FMCSA] Raw response JSON:")
-    try:
-        print(json.dumps(data, indent=2))
-    except TypeError:
-        print(data)
 
     if not response.is_success:
         raise FmcsaServiceError("FMCSA service returned an unexpected response.")
