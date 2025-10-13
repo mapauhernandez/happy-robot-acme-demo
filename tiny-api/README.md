@@ -55,6 +55,15 @@ Required variables:
 - `APP_API_KEY`: API key expected in the `x-api-key` header for all authenticated endpoints.
 - `FMCSA_WEBKEY`: Web key issued by FMCSA for the QCMobile API.
 
+You can create a throwaway demo key by choosing any random string. For example, on macOS or Linux
+generate a 32-character hexadecimal key with:
+
+```bash
+openssl rand -hex 16
+```
+
+Copy the value into your `.env` file (and share it with anyone who needs to call the API).
+
 The app loads variables from `.env` automatically at startup.
 
 ### Running Locally
