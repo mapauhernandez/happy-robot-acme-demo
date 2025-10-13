@@ -57,6 +57,14 @@ EQUIPMENT_KEYWORDS = {
 def infer_equipment_preferences(
     *, carrier_name: Optional[str], authority_status: Optional[str]
 ) -> List[str]:
+    """Infer equipment order from carrier metadata.
+
+    The function scans the carrier name and authority status text for
+    equipment-specific keywords (for example "reefer" or "refrigerated").
+    Any matches are prioritised first and the remaining defaults (Dry Van,
+    Reefer) are appended afterwards so the recommendation phase always
+    evaluates both supported equipment classes.
+    """
     text_blobs = " ".join(filter(None, [carrier_name, authority_status])).lower()
     preferences: List[str] = []
 
@@ -77,6 +85,22 @@ def recommend_loads_for_carrier(
     origin_state: Optional[str],
     limit_per_equipment: int = 5,
 ) -> List[LoadRecommendation]:
+    """Return top load matches for the carrier profile.
+
+    Selection criteria are applied in the following order:
+
+    1. Restrict loads to the current equipment type being evaluated.
+    2. If the carrier's registered state is available, prefer loads whose
+       origin includes the same state abbreviation. When none match, fall
+       back to the full set for that equipment type.
+    3. Sort the candidate list by `loadboard_rate` in descending order and
+       take up to ``limit_per_equipment`` unique loads across equipment
+       groups.
+
+    The function returns each equipment grouping alongside the loads that
+    satisfied these filters so callers can explain why a recommendation was
+    chosen.
+    """
     loads = _load_data()
     normalized_state = _normalize_state(origin_state)
     seen_ids: Set[str] = set()
