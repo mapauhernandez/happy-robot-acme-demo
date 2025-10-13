@@ -38,29 +38,112 @@ def _extract_str(value: Any) -> Optional[str]:
     return text or None
 
 
+def _expand_status_code(code: Optional[str]) -> Optional[str]:
+    extracted = _extract_str(code)
+    if not extracted:
+        return None
+    normalized = extracted.lower()
+    mapping = {
+        "a": "Active",
+        "i": "Inactive",
+        "n": "Inactive",
+        "o": "Out of Service",
+        "s": "Suspended",
+        "v": "Inactive (voluntary)",
+        "p": "Pending",
+        "r": "Revoked",
+    }
+    return mapping.get(normalized, extracted)
+
+
+def _interpret_allowed_flag(value: Optional[str]) -> Optional[str]:
+    extracted = _extract_str(value)
+    if not extracted:
+        return None
+    normalized = extracted.lower()
+    truthy = {"y", "yes", "true", "1"}
+    falsy = {"n", "no", "false", "0"}
+    if normalized in truthy:
+        return "Allowed to operate"
+    if normalized in falsy:
+        return "Not allowed to operate"
+    return f"Allowed to operate: {extracted}"
+
+
+def _status_text_indicates_active(status: Optional[str]) -> bool:
+    if not status:
+        return False
+    normalized = status.lower()
+    if "inactive" in normalized or "revoked" in normalized:
+        return False
+    if "not" in normalized and "authorized" in normalized:
+        return False
+    return "active" in normalized or "authorized" in normalized or "allowed" in normalized
+
+
 def _normalize_authority_status(carrier: Dict[str, Any]) -> Optional[str]:
-    candidates = [
+    fragments = []
+
+    descriptive_fields = [
         carrier.get("operatingStatus"),
         carrier.get("authorityStatus"),
         carrier.get("authorityDescription"),
         carrier.get("operatingStatusDesc"),
     ]
-    for candidate in candidates:
-        extracted = _extract_str(candidate)
+    for field in descriptive_fields:
+        extracted = _extract_str(field)
         if extracted:
-            return extracted
-    return None
+            fragments.append(extracted)
+            break
+
+    code_fields = [
+        ("Status", carrier.get("statusCode")),
+        ("Common", carrier.get("commonAuthorityStatus")),
+        ("Contract", carrier.get("contractAuthorityStatus")),
+        ("Broker", carrier.get("brokerAuthorityStatus")),
+    ]
+    for label, value in code_fields:
+        expanded = _expand_status_code(value)
+        if expanded:
+            fragments.append(f"{label}: {expanded}")
+
+    allowed_fragment = _interpret_allowed_flag(carrier.get("allowedToOperate"))
+    if allowed_fragment:
+        fragments.append(allowed_fragment)
+
+    unique_fragments: list[str] = []
+    for fragment in fragments:
+        if fragment and fragment not in unique_fragments:
+            unique_fragments.append(fragment)
+
+    return "; ".join(unique_fragments) or None
 
 
-def _is_authority_active(status: Optional[str]) -> bool:
-    if not status:
-        return False
-    normalized = status.lower()
-    if "inactive" in normalized:
-        return False
-    if "not" in normalized and "authorized" in normalized:
-        return False
-    return "active" in normalized or "authorized" in normalized
+def _determine_eligibility(carrier: Dict[str, Any], status_text: Optional[str]) -> bool:
+    if _status_text_indicates_active(status_text):
+        return True
+
+    allowed_flag = _extract_str(carrier.get("allowedToOperate"))
+    if allowed_flag and allowed_flag.lower() in {"y", "yes", "true", "1"}:
+        return True
+
+    status_codes = [
+        carrier.get("statusCode"),
+        carrier.get("commonAuthorityStatus"),
+        carrier.get("contractAuthorityStatus"),
+        carrier.get("brokerAuthorityStatus"),
+    ]
+    for code in status_codes:
+        extracted = _extract_str(code)
+        if not extracted:
+            continue
+        normalized = extracted.lower()
+        if normalized.startswith("a") or normalized == "yes":
+            return True
+        if normalized.startswith("i") or normalized.startswith("r") or normalized.startswith("s"):
+            return False
+
+    return False
 
 
 def _looks_like_carrier_block(candidate: Dict[str, Any]) -> bool:
@@ -131,7 +214,7 @@ def _parse_carrier_payload(payload: Dict[str, Any], mc: str) -> CarrierRecord:
     authority_status = _normalize_authority_status(carrier_block)
     print(f"[FMCSA] Extracted authority status: {authority_status}")
 
-    eligible = _is_authority_active(authority_status)
+    eligible = _determine_eligibility(carrier_block, authority_status)
     print(f"[FMCSA] Eligible: {eligible}")
 
     return CarrierRecord(
