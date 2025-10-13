@@ -93,6 +93,23 @@ curl \
   "http://127.0.0.1:8000/verify_fmcsa?mc=123456"
 ```
 
+### Matching a carrier to loads
+
+1. **Verify the carrier** with `/verify_fmcsa` to ensure they are eligible. The response includes the MC you asked about along with DOT
+   and authority information. (Example shown above.)
+2. **Choose an equipment type** that matches the carrier's equipment. The demo dataset ships with loads for `Dry Van` and `Reefer`.
+   You can open `app/data/loads.json` to view the available equipment options, origins, and rates.
+3. **Search loads** by calling `/loads/search` with the equipment type and optional filters (origin substring and pickup date). The
+   endpoint always returns the top five matches sorted by the highest rate.
+
+Example: after confirming a reefer carrier is eligible, request matching loads with an origin hint:
+
+```bash
+curl \
+  -H "x-api-key: $APP_API_KEY" \
+  "http://127.0.0.1:8000/loads/search?equipment_type=Reefer&origin=Phoenix"
+```
+
 Load search:
 
 ```bash
