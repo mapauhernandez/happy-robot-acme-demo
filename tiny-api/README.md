@@ -17,12 +17,29 @@ A tiny FastAPI JSON service used by the HappyRobot voice agent to verify carrier
 - Python 3.11+
 - `pip`
 
+> **Note**
+> All commands below assume you are inside the `tiny-api/` directory.
+
 ### Installation
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+```
+
+### Quick smoke test
+
+After installing dependencies you can verify the modules compile by running:
+
+```bash
+python -m compileall app
+```
+
+If you prefer to execute the command from the repository root, provide the full path:
+
+```bash
+python -m compileall tiny-api/app
 ```
 
 ### Environment Variables
