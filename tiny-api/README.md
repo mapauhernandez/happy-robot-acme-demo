@@ -66,6 +66,9 @@ Copy the value into your `.env` file (and share it with anyone who needs to call
 
 The app loads variables from `.env` automatically at startup.
 
+> **Tip**
+> When running curl examples below, either export the key into your shell (`export APP_API_KEY=$(grep -E '^APP_API_KEY' .env | cut -d= -f2-)`) or replace `$APP_API_KEY` with the literal value from your `.env` file. A `403 Forbidden` response usually means the header value did not match the key loaded by the server (for example when the shell variable is empty or the server was not restarted after editing `.env`).
+
 ### Running Locally
 
 ```bash
