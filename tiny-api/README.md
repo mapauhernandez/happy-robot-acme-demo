@@ -109,10 +109,10 @@ The service performs three steps for you:
 1. Verifies the MC number with FMCSA and rejects ineligible carriers with HTTP 409.
 2. Infers likely equipment preferences from the carrier's profile (preferring Reefer loads when the name references cold chain
    freight, otherwise defaulting to Dry Van).
-3. Filters the load board for each preferred equipment class. It prioritises loads that (a) pick up **today** and (b) originate in
-   the carrier's registered state. When no such matches exist it progressively relaxes the filters (today-only, state-only, then
-   all loads for that equipment type) while always ranking by `loadboard_rate` and removing duplicates so the caller gets the most
-   lucrative viable options.
+3. Filters the load board for each preferred equipment class. Demo loads are treated as a weekly recurring board so pickup dates
+   are normalised to the next occurrence of their weekday. The matcher keeps only departures in the next few days, scores them so
+   same-state pickups today win, then considers same-state tomorrow, regional matches, and finally other near-term options—always
+   ordering by `loadboard_rate` and de-duplicating across equipment groups so you only see the strongest opportunities.
 
 If no loads match the carrier profile you will receive HTTP 404 along with `{ "error": "No loads matched the carrier profile." }`.
 
