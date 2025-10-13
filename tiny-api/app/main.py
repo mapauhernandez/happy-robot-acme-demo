@@ -17,7 +17,11 @@ from app.services.fmcsa import (
     FmcsaServiceError,
     fetch_carrier_by_mc,
 )
-from app.services.loads import search_loads
+from app.services.loads import (
+    infer_equipment_preferences,
+    recommend_loads_for_carrier,
+    search_loads,
+)
 from app.utils.auth import APIKeyMiddleware
 
 load_dotenv()
@@ -54,7 +58,13 @@ class CarrierVerificationResponse(BaseModel):
 
     @classmethod
     def from_record(cls, record: CarrierRecord) -> "CarrierVerificationResponse":
-        return cls(**record.__dict__)
+        return cls(
+            mc=record.mc,
+            dot_number=record.dot_number,
+            carrier_name=record.carrier_name,
+            authority_status=record.authority_status,
+            eligible=record.eligible,
+        )
 
 
 class LoadItem(BaseModel):
@@ -75,6 +85,19 @@ class LoadItem(BaseModel):
 
 class LoadsSearchResponse(BaseModel):
     items: List[LoadItem]
+
+
+class LoadRecommendationGroup(BaseModel):
+    equipment_type: str
+    matched_origin_state: Optional[str] = Field(
+        None, description="Two-letter state code when an origin match was applied"
+    )
+    items: List[LoadItem]
+
+
+class LoadRecommendationsResponse(BaseModel):
+    carrier: CarrierVerificationResponse
+    recommendations: List[LoadRecommendationGroup]
 
 
 class NegotiationRequest(BaseModel):
@@ -154,6 +177,65 @@ async def search_loads_endpoint(
         pickup_after=pickup_after,
     )
     return LoadsSearchResponse(items=[LoadItem(**item) for item in items])
+
+
+@app.get(
+    "/loads/recommendations",
+    response_model=LoadRecommendationsResponse,
+    responses={
+        400: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        409: {"model": ErrorResponse},
+        502: {"model": ErrorResponse},
+    },
+)
+async def recommend_loads_endpoint(
+    mc: str = Query(..., description="Carrier MC (docket) number used for matching"),
+) -> LoadRecommendationsResponse:
+    if not mc.isdigit():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="MC number must be numeric.")
+
+    try:
+        record = await fetch_carrier_by_mc(mc, FMCSA_WEBKEY)
+    except CarrierNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Carrier not found.")
+    except FmcsaServiceError:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Unable to reach FMCSA service.")
+
+    if not record.eligible:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Carrier is not eligible for load matching.",
+        )
+
+    equipment_preferences = infer_equipment_preferences(
+        carrier_name=record.carrier_name,
+        authority_status=record.authority_status,
+    )
+    recommendations = recommend_loads_for_carrier(
+        equipment_preferences=equipment_preferences,
+        origin_state=record.physical_state,
+    )
+
+    if not recommendations:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No loads matched the carrier profile.",
+        )
+
+    groups = [
+        LoadRecommendationGroup(
+            equipment_type=group.equipment_type,
+            matched_origin_state=group.matched_origin_state,
+            items=[LoadItem(**item) for item in group.items],
+        )
+        for group in recommendations
+    ]
+
+    return LoadRecommendationsResponse(
+        carrier=CarrierVerificationResponse.from_record(record),
+        recommendations=groups,
+    )
 
 
 @app.post("/negotiate", response_model=NegotiationResponse)

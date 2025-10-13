@@ -6,6 +6,7 @@ A tiny FastAPI JSON service used by the HappyRobot voice agent to verify carrier
 
 - Carrier verification via FMCSA QCMobile API.
 - Load board search backed by a local JSON dataset.
+- Automatic load recommendations derived from a carrier's MC number.
 - Simple counter-offer negotiation helper.
 - Append-only call logging to JSON Lines file.
 - Static API key authentication with health check bypass.
@@ -93,14 +94,30 @@ curl \
   "http://127.0.0.1:8000/verify_fmcsa?mc=123456"
 ```
 
-### Matching a carrier to loads
+### Automatic load recommendations
 
-1. **Verify the carrier** with `/verify_fmcsa` to ensure they are eligible. The response includes the MC you asked about along with DOT
-   and authority information. (Example shown above.)
-2. **Choose an equipment type** that matches the carrier's equipment. The demo dataset ships with loads for `Dry Van` and `Reefer`.
-   You can open `app/data/loads.json` to view the available equipment options, origins, and rates.
-3. **Search loads** by calling `/loads/search` with the equipment type and optional filters (origin substring and pickup date). The
-   endpoint always returns the top five matches sorted by the highest rate.
+Once a carrier is confirmed eligible, you can let the API pick suitable loads automatically:
+
+```bash
+curl \
+  -H "x-api-key: $APP_API_KEY" \
+  "http://127.0.0.1:8000/loads/recommendations?mc=555555"
+```
+
+The service performs three steps for you:
+
+1. Verifies the MC number with FMCSA and rejects ineligible carriers with HTTP 409.
+2. Infers likely equipment preferences from the carrier's profile (preferring Reefer loads when the name references cold chain
+   freight, otherwise defaulting to Dry Van).
+3. Pulls the top-rated loads for each preferred equipment type, prioritising pickup states that match the carrier's registered
+   physical state. Each equipment group returns up to five unique loads.
+
+If no loads match the carrier profile you will receive HTTP 404 along with `{ "error": "No loads matched the carrier profile." }`.
+
+### Manual load search
+
+You can still request loads yourself by choosing the equipment type and filters explicitly. The dataset ships with `Dry Van` and
+`Reefer` entries—open `app/data/loads.json` to explore the demo inventory.
 
 Example: after confirming a reefer carrier is eligible, request matching loads with an origin hint:
 

@@ -26,6 +26,8 @@ class CarrierRecord:
     carrier_name: Optional[str]
     authority_status: Optional[str]
     eligible: bool
+    physical_city: Optional[str] = None
+    physical_state: Optional[str] = None
 
 
 def _extract_str(value: Any) -> Optional[str]:
@@ -204,12 +206,25 @@ def _parse_carrier_payload(payload: Dict[str, Any], mc: str) -> CarrierRecord:
 
     eligible = _determine_eligibility(carrier_block, authority_status)
 
+    physical_city = _extract_str(
+        carrier_block.get("phyCity")
+        or carrier_block.get("mailingCity")
+        or carrier_block.get("principalPlaceOfBusinessCity")
+    )
+    physical_state = _extract_str(
+        carrier_block.get("phyState")
+        or carrier_block.get("mailingState")
+        or carrier_block.get("principalPlaceOfBusinessState")
+    )
+
     return CarrierRecord(
         mc=mc,
         dot_number=dot_number,
         carrier_name=carrier_name,
         authority_status=authority_status,
         eligible=eligible,
+        physical_city=physical_city,
+        physical_state=physical_state,
     )
 
 
