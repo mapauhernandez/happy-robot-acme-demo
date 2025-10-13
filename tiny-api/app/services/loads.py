@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Set
 
@@ -38,6 +38,20 @@ def _origin_state_from_location(location: Optional[str]) -> Optional[str]:
     if not parts:
         return None
     return _normalize_state(parts[-1])
+
+
+def _pickup_date(load: Dict[str, Any]) -> Optional[date]:
+    pickup_raw = load.get("pickup_datetime")
+    if not isinstance(pickup_raw, str):
+        return None
+    try:
+        pickup_dt = datetime.fromisoformat(pickup_raw)
+    except ValueError:
+        return None
+    if pickup_dt.tzinfo is None:
+        pickup_dt = pickup_dt.replace(tzinfo=timezone.utc)
+    pickup_dt = pickup_dt.astimezone(timezone.utc)
+    return pickup_dt.date()
 
 
 @dataclass
@@ -90,9 +104,10 @@ def recommend_loads_for_carrier(
     Selection criteria are applied in the following order:
 
     1. Restrict loads to the current equipment type being evaluated.
-    2. If the carrier's registered state is available, prefer loads whose
-       origin includes the same state abbreviation. When none match, fall
-       back to the full set for that equipment type.
+    2. Prioritise loads that pick up today *and* originate in the carrier's
+       state (when available), then fall back to other combinations in the
+       following order: today-only, state-only, finally any remaining loads
+       for that equipment type.
     3. Sort the candidate list by `loadboard_rate` in descending order and
        take up to ``limit_per_equipment`` unique loads across equipment
        groups.
@@ -105,6 +120,7 @@ def recommend_loads_for_carrier(
     normalized_state = _normalize_state(origin_state)
     seen_ids: Set[str] = set()
     recommendations: List[LoadRecommendation] = []
+    today = datetime.now(timezone.utc).date()
 
     for equipment in equipment_preferences:
         equipment_lower = equipment.lower()
@@ -114,15 +130,40 @@ def recommend_loads_for_carrier(
         if not equipment_loads:
             continue
 
-        state_matches = []
-        if normalized_state:
-            for load in equipment_loads:
-                origin_state_value = _origin_state_from_location(str(load.get("origin", "")))
-                if origin_state_value and origin_state_value == normalized_state:
-                    state_matches.append(load)
+        near_today: List[Dict[str, Any]] = []
+        today_only: List[Dict[str, Any]] = []
+        near_only: List[Dict[str, Any]] = []
+        remainder: List[Dict[str, Any]] = []
 
-        prioritized = state_matches if state_matches else equipment_loads
-        prioritized.sort(key=lambda item: item.get("loadboard_rate", 0), reverse=True)
+        for load in equipment_loads:
+            pickup_date = _pickup_date(load)
+            origin_state_value = _origin_state_from_location(str(load.get("origin", "")))
+            is_today = pickup_date == today if pickup_date else False
+            is_near = bool(normalized_state and origin_state_value == normalized_state)
+
+            if is_today and is_near:
+                near_today.append(load)
+            elif is_today:
+                today_only.append(load)
+            elif is_near:
+                near_only.append(load)
+            else:
+                remainder.append(load)
+
+        prioritized_groups = [near_today, today_only, near_only, remainder]
+        prioritized: List[Dict[str, Any]] = []
+        matched_state_for_group: Optional[str] = None
+
+        for group in prioritized_groups:
+            if group:
+                group.sort(key=lambda item: item.get("loadboard_rate", 0), reverse=True)
+                prioritized = group
+                if group is near_today or group is near_only:
+                    matched_state_for_group = normalized_state
+                break
+
+        if not prioritized:
+            continue
 
         selected: List[Dict[str, Any]] = []
         for load in prioritized:
@@ -135,7 +176,7 @@ def recommend_loads_for_carrier(
                 break
 
         if selected:
-            matched_state = normalized_state if state_matches else None
+            matched_state = matched_state_for_group
             recommendations.append(
                 LoadRecommendation(
                     equipment_type=equipment,
