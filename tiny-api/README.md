@@ -78,6 +78,22 @@ uvicorn app.main:app --reload
 
 The server listens on `http://127.0.0.1:8000` by default. Use the API key in the request header `x-api-key` when calling authenticated endpoints.
 
+### CLI dashboard snapshot
+
+You can inspect the load board without starting the web service by rendering the
+text dashboard:
+
+```bash
+python -m app.dashboard_cli
+```
+
+Provide a reference date to see how the recurring demo loads map to a specific
+week:
+
+```bash
+python -m app.dashboard_cli --reference-date 2024-04-15
+```
+
 ### Example Requests
 
 Health check (no auth):
