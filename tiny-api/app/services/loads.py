@@ -345,3 +345,24 @@ def search_loads(
     filtered = [load for load in loads if matches(load)]
     filtered.sort(key=lambda item: item.get("loadboard_rate", 0), reverse=True)
     return filtered[:5]
+
+
+def load_board_snapshot(reference_date: Optional[date] = None) -> List[Dict[str, Any]]:
+    """Return the normalized load board dataset used by the API."""
+
+    return _load_data(reference_date)
+
+
+def origin_state_for_load(load: Dict[str, Any]) -> Optional[str]:
+    """Extract the origin state code from a load record."""
+
+    origin = load.get("origin")
+    if origin is None:
+        return None
+    return _origin_state_from_location(str(origin))
+
+
+def pickup_date_for_load(load: Dict[str, Any]) -> Optional[date]:
+    """Return the normalized pickup date for a load record."""
+
+    return _pickup_date(load)
