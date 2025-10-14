@@ -5,7 +5,7 @@ import re
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Set
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 LOADS_FILE = BASE_DIR / "data" / "loads.json"
@@ -218,7 +218,12 @@ def recommend_loads_for_carrier(
     normalized_state = _normalize_state(origin_state)
     normalized_region = _region_for_state(normalized_state)
     seen_ids: Set[str] = set()
-    recommendations: List[LoadRecommendation] = []
+    best_candidate: Optional[
+        Tuple[Tuple[int, int, float], str, Optional[str], Dict[str, Any]]
+    ] = None
+
+    if limit_per_equipment <= 0:
+        return []
 
     for equipment in equipment_preferences:
         equipment_lower = equipment.lower()
@@ -282,30 +287,32 @@ def recommend_loads_for_carrier(
 
         scored_loads.sort()
 
-        selected: List[Dict[str, Any]] = []
-        match_descriptor: Optional[str] = None
-
-        for _, __, ___, label, load in scored_loads:
+        for priority, days_diff, rate_key, label, load in scored_loads:
             load_id = str(load.get("load_id"))
             if load_id in seen_ids:
                 continue
-            selected.append(load)
             seen_ids.add(load_id)
-            if not match_descriptor and label:
-                match_descriptor = label
-            if len(selected) >= limit_per_equipment:
-                break
-
-        if selected:
-            recommendations.append(
-                LoadRecommendation(
-                    equipment_type=equipment,
-                    matched_origin_state=match_descriptor,
-                    items=selected,
+            candidate_key = (priority, days_diff, rate_key)
+            if not best_candidate or candidate_key < best_candidate[0]:
+                best_candidate = (
+                    candidate_key,
+                    equipment,
+                    label,
+                    load,
                 )
-            )
+            break
 
-    return recommendations
+    if not best_candidate:
+        return []
+
+    _, equipment, match_descriptor, load = best_candidate
+    return [
+        LoadRecommendation(
+            equipment_type=equipment,
+            matched_origin_state=match_descriptor,
+            items=[load],
+        )
+    ]
 
 
 def search_loads(
