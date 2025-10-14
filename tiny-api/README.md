@@ -157,6 +157,32 @@ curl \
   http://127.0.0.1:8000/calls/log
 ```
 
+Log negotiation outcomes:
+
+```bash
+curl \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: $APP_API_KEY" \
+  -d '{
+        "negotiation_rounds": 3,
+        "final_price": 2150,
+        "commodity_type": "Produce",
+        "load_booked": true,
+        "equipment_type": "Reefer"
+      }' \
+  http://127.0.0.1:8000/negotiations/log
+```
+
+View the lightweight dashboard summarising logged negotiations:
+
+```bash
+curl \
+  -H "x-api-key: $APP_API_KEY" \
+  http://127.0.0.1:8000/negotiations/dashboard
+```
+
+Alternatively, open the dashboard in your browser to see a formatted table and key metrics. The page automatically updates with the latest entries appended via the `/negotiations/log` endpoint.
+
 ### Docker
 
 Build the container:
