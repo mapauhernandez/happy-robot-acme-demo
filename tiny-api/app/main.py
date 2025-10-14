@@ -1,15 +1,17 @@
 from __future__ import annotations
 
+import html
 import json
 import os
+from collections import Counter
 from datetime import datetime
 from typing import Any, List, Optional
 
 from dotenv import load_dotenv
 from fastapi import Body, FastAPI, HTTPException, Query, Request, status
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from fastapi.responses import HTMLResponse, JSONResponse
+from pydantic import BaseModel, Field, ValidationError
 
 from app.services.fmcsa import (
     CarrierNotFoundError,
@@ -112,6 +114,58 @@ class NegotiationResponse(BaseModel):
 
 class CallLogResponse(BaseModel):
     status: str
+
+
+class NegotiationLogRequest(BaseModel):
+    negotiation_rounds: int = Field(..., ge=0, description="Total back-and-forth counter offers")
+    final_price: float = Field(..., gt=0, description="Final negotiated rate in USD")
+    commodity_type: str = Field(..., min_length=1)
+    load_booked: bool = Field(..., description="Flag indicating whether the load was booked")
+    equipment_type: str = Field(..., min_length=1)
+
+
+class NegotiationLogEntry(NegotiationLogRequest):
+    timestamp: str = Field(..., description="UTC timestamp when the entry was recorded")
+
+
+class NegotiationLogResponse(BaseModel):
+    status: str
+    entry: NegotiationLogEntry
+
+
+DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
+CALL_LOG_PATH = os.path.join(DATA_DIR, "calls.log.jsonl")
+NEGOTIATION_LOG_PATH = os.path.join(DATA_DIR, "negotiations.log.jsonl")
+
+
+def _append_json_line(path: str, payload: Any) -> None:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "a", encoding="utf-8") as fp:
+        fp.write(json.dumps(payload, default=str))
+        fp.write("\n")
+
+
+def _load_negotiation_entries() -> List[NegotiationLogEntry]:
+    if not os.path.exists(NEGOTIATION_LOG_PATH):
+        return []
+
+    entries: List[NegotiationLogEntry] = []
+    with open(NEGOTIATION_LOG_PATH, "r", encoding="utf-8") as fp:
+        for line in fp:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                raw_entry = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+
+            try:
+                entries.append(NegotiationLogEntry(**raw_entry))
+            except ValidationError:
+                continue
+
+    return entries
 
 
 @app.exception_handler(HTTPException)
@@ -253,14 +307,148 @@ async def negotiate_offer(request: NegotiationRequest) -> NegotiationResponse:
     return NegotiationResponse(accepted=False, final_offer=round(final_counter, 2))
 
 
+@app.post("/negotiations/log", response_model=NegotiationLogResponse)
+async def log_negotiation(request: NegotiationLogRequest) -> NegotiationLogResponse:
+    request_payload = request.model_dump() if hasattr(request, "model_dump") else request.dict()
+    entry = NegotiationLogEntry(
+        timestamp=f"{datetime.utcnow().replace(microsecond=0).isoformat()}Z",
+        **request_payload,
+    )
+
+    entry_payload = entry.model_dump() if hasattr(entry, "model_dump") else entry.dict()
+    _append_json_line(NEGOTIATION_LOG_PATH, entry_payload)
+
+    return NegotiationLogResponse(status="saved", entry=entry)
+
+
+@app.get("/negotiations/dashboard", response_class=HTMLResponse)
+async def negotiations_dashboard() -> HTMLResponse:
+    entries = _load_negotiation_entries()
+    title = "Negotiation Performance Dashboard"
+
+    if not entries:
+        empty_html = f"""
+        <html>
+          <head>
+            <title>{html.escape(title)}</title>
+            <style>
+              body {{ font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 2rem; }}
+              .card {{ padding: 1.5rem; border-radius: 8px; background: #f5f5f5; max-width: 420px; }}
+            </style>
+          </head>
+          <body>
+            <div class="card">
+              <h1>{html.escape(title)}</h1>
+              <p>No negotiations have been logged yet. Submit entries with the <code>/negotiations/log</code> endpoint to populate the dashboard.</p>
+            </div>
+          </body>
+        </html>
+        """
+        return HTMLResponse(content=empty_html)
+
+    total_entries = len(entries)
+    booked_count = sum(1 for entry in entries if entry.load_booked)
+    average_price = sum(entry.final_price for entry in entries) / total_entries
+    average_rounds = sum(entry.negotiation_rounds for entry in entries) / total_entries
+
+    equipment_counts = Counter(entry.equipment_type for entry in entries)
+    commodity_counts = Counter(entry.commodity_type for entry in entries)
+
+    def _format_counter(counter: Counter[str]) -> str:
+        top_three = counter.most_common(3)
+        if not top_three:
+            return "—"
+        return ", ".join(
+            f"{html.escape(name)} ({count})" for name, count in top_three
+        )
+
+    table_rows = "".join(
+        "<tr>"
+        f"<td>{html.escape(entry.timestamp)}</td>"
+        f"<td>{html.escape(entry.commodity_type)}</td>"
+        f"<td>{html.escape(entry.equipment_type)}</td>"
+        f"<td>{entry.negotiation_rounds}</td>"
+        f"<td>${entry.final_price:,.2f}</td>"
+        f"<td>{'Yes' if entry.load_booked else 'No'}</td>"
+        "</tr>"
+        for entry in entries
+    )
+
+    booked_ratio = (booked_count / total_entries) * 100 if total_entries else 0
+
+    html_content = f"""
+    <html>
+      <head>
+        <title>{html.escape(title)}</title>
+        <style>
+          :root {{ color-scheme: light dark; }}
+          body {{ font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 2rem; line-height: 1.5; }}
+          h1 {{ margin-bottom: 1.5rem; }}
+          .metrics {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 2rem; }}
+          .metric {{ border-radius: 10px; padding: 1.25rem; background: rgba(59, 130, 246, 0.08); backdrop-filter: blur(6px); }}
+          .metric h2 {{ font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 0.35rem 0; color: #2563eb; }}
+          .metric p {{ font-size: 1.5rem; margin: 0; font-weight: 600; }}
+          table {{ border-collapse: collapse; width: 100%; }}
+          th, td {{ text-align: left; padding: 0.75rem; border-bottom: 1px solid rgba(148, 163, 184, 0.4); }}
+          th {{ font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.08em; color: #475569; }}
+          tr:hover td {{ background: rgba(59, 130, 246, 0.08); }}
+          code {{ background: rgba(100, 116, 139, 0.15); padding: 0.1rem 0.3rem; border-radius: 4px; }}
+        </style>
+      </head>
+      <body>
+        <h1>{html.escape(title)}</h1>
+        <section class="metrics">
+          <div class="metric">
+            <h2>Total entries</h2>
+            <p>{total_entries}</p>
+          </div>
+          <div class="metric">
+            <h2>Loads booked</h2>
+            <p>{booked_count} <small>({booked_ratio:.1f}% win rate)</small></p>
+          </div>
+          <div class="metric">
+            <h2>Avg. final price</h2>
+            <p>${average_price:,.2f}</p>
+          </div>
+          <div class="metric">
+            <h2>Avg. negotiation rounds</h2>
+            <p>{average_rounds:.1f}</p>
+          </div>
+          <div class="metric">
+            <h2>Top equipment</h2>
+            <p>{_format_counter(equipment_counts)}</p>
+          </div>
+          <div class="metric">
+            <h2>Top commodities</h2>
+            <p>{_format_counter(commodity_counts)}</p>
+          </div>
+        </section>
+        <section>
+          <h2>Recent negotiations</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Logged at (UTC)</th>
+                <th>Commodity</th>
+                <th>Equipment</th>
+                <th>Rounds</th>
+                <th>Final price</th>
+                <th>Booked?</th>
+              </tr>
+            </thead>
+            <tbody>
+              {table_rows}
+            </tbody>
+          </table>
+        </section>
+      </body>
+    </html>
+    """
+
+    return HTMLResponse(content=html_content)
+
+
 @app.post("/calls/log", response_model=CallLogResponse)
 async def log_call(payload: Any = Body(...)) -> CallLogResponse:
-    data_dir = os.path.join(os.path.dirname(__file__), "data")
-    os.makedirs(data_dir, exist_ok=True)
-    log_path = os.path.join(data_dir, "calls.log.jsonl")
-
-    with open(log_path, "a", encoding="utf-8") as fp:
-        fp.write(json.dumps(payload, default=str))
-        fp.write("\n")
-
+    _append_json_line(CALL_LOG_PATH, payload)
     return CallLogResponse(status="saved")
