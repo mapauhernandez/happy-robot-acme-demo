@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 import random
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Security, status
 from fastapi.security import APIKeyHeader
@@ -11,9 +11,13 @@ from pydantic import BaseModel, Field
 
 from database import fetch_all_loads, initialize_database
 
-initialize_database()
-
 app = FastAPI(title="HappyRobot Carrier Demo API")
+
+
+@app.on_event("startup")
+def _ensure_database() -> None:
+    """Initialize the SQLite database before serving requests."""
+    initialize_database()
 
 API_KEY_HEADER_NAME = "X-API-Key"
 DEFAULT_API_KEY = "local-dev-api-key"
@@ -48,7 +52,7 @@ class LoadResponse(BaseModel):
     delivery_datetime: str
     equipment_type: str
     loadboard_rate: float
-    notes: str | None = None
+    notes: Optional[str] = None
     weight: int
     commodity_type: str
     num_of_pieces: int
@@ -68,7 +72,9 @@ def _normalize_equipment(equipment: str) -> str:
     return equipment.strip().lower()
 
 
-def _select_load(loads: List[Dict[str, Any]], origin_state: str, equipment: str) -> Dict[str, Any] | None:
+def _select_load(
+    loads: List[Dict[str, Any]], origin_state: str, equipment: str
+) -> Optional[Dict[str, Any]]:
     """Choose an appropriate load based on state and equipment preferences."""
     if not origin_state:
         return None
