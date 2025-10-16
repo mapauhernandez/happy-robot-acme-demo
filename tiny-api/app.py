@@ -24,7 +24,7 @@ DEFAULT_API_KEY = "local-dev-api-key"
 api_key_header = APIKeyHeader(name=API_KEY_HEADER_NAME, auto_error=False)
 
 
-def verify_api_key(api_key: str | None = Security(api_key_header)) -> str:
+def verify_api_key(api_key: Optional[str] = Security(api_key_header)) -> str:
     """Ensure the caller supplied the expected API key."""
     expected_key = os.getenv("DEMO_API_KEY", DEFAULT_API_KEY)
     if not api_key or api_key != expected_key:
