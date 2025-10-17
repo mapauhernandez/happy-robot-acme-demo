@@ -48,6 +48,11 @@ curl -X POST \
   http://127.0.0.1:8000/negotiations
 ```
 
+You can also run `scripts/post-negotiation.sh`, which issues the same request with `curl -v`
+so you can observe the request/response exchange. Override `TINY_API_HOST` or
+`DEMO_API_KEY` in your shell if you are targeting a remote deployment or using a
+custom API key.
+
 The endpoint returns the stored record, including a generated `id` and timestamp.
 
 Retrieve all submissions with:
@@ -63,6 +68,11 @@ Start the development server with Uvicorn:
 ```bash
 uvicorn app:app --reload
 ```
+
+If `curl` reports `Empty reply from server`, double-check that the server is
+running and that you are invoking `curl` (not a truncated command such as `rl`).
+The verbose script above is also helpful for confirming that the API key header
+is attached correctly.
 
 ### Enabling HTTPS locally
 
