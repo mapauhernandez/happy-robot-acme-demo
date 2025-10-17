@@ -1,16 +1,19 @@
 """Endpoints for recording and retrieving negotiation outcomes."""
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from typing import List
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from database import fetch_all_negotiations, insert_negotiation
 from schemas import NegotiationRecord, NegotiationRequest
 from security import verify_api_key
 
 router = APIRouter(prefix="/negotiations", tags=["negotiations"])
+
+logger = logging.getLogger(__name__)
 
 
 @router.post("", response_model=NegotiationRecord, status_code=status.HTTP_201_CREATED)
@@ -19,17 +22,31 @@ def create_negotiation(
 ) -> NegotiationRecord:
     """Persist a negotiation outcome supplied by the caller."""
 
+    logger.debug("Received negotiation submission", extra={"payload": request.model_dump()})
+
     created_at = datetime.utcnow().replace(microsecond=0)
-    row_id = insert_negotiation(
-        {
-            "load_accepted": 1 if request.load_accepted else 0,
-            "posted_price": request.posted_price,
-            "final_price": request.final_price,
-            "total_negotiations": request.total_negotiations,
-            "call_sentiment": request.call_sentiment,
-            "commodity": request.commodity,
-            "created_at": created_at.isoformat(),
-        }
+    try:
+        row_id = insert_negotiation(
+            {
+                "load_accepted": 1 if request.load_accepted else 0,
+                "posted_price": request.posted_price,
+                "final_price": request.final_price,
+                "total_negotiations": request.total_negotiations,
+                "call_sentiment": request.call_sentiment,
+                "commodity": request.commodity,
+                "created_at": created_at.isoformat(),
+            }
+        )
+    except Exception as exc:  # pragma: no cover - diagnostic path
+        logger.exception("Negotiation insert failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to record negotiation",
+        ) from exc
+
+    logger.info(
+        "Negotiation stored",
+        extra={"row_id": row_id, "created_at": created_at.isoformat()},
     )
 
     return NegotiationRecord(id=row_id, created_at=created_at, **request.model_dump())

@@ -1,12 +1,16 @@
 """Utility helpers for managing the sample loads SQLite database."""
 from __future__ import annotations
 
+import logging
 import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Iterable, List, Mapping
 
 DB_PATH = Path(__file__).resolve().parent / "loads.db"
+
+
+logger = logging.getLogger(__name__)
 
 
 STATE_LOAD_DETAILS: List[tuple[str, str, str, str, str]] = [
@@ -147,8 +151,20 @@ def _ensure_negotiations_schema(conn: sqlite3.Connection) -> None:
     info_rows = conn.execute("PRAGMA table_info(negotiations)").fetchall()
     existing_columns = {row["name"] for row in info_rows}
 
+    logger.debug(
+        "Negotiations schema check", extra={"existing_columns": sorted(existing_columns)}
+    )
+
     if existing_columns == expected_columns:
         return
+
+    logger.warning(
+        "Rebuilding negotiations table to match expected schema",
+        extra={
+            "expected_columns": sorted(expected_columns),
+            "existing_columns": sorted(existing_columns),
+        },
+    )
 
     conn.execute("DROP TABLE IF EXISTS negotiations")
     conn.execute(
@@ -242,6 +258,7 @@ def insert_negotiation(record: Mapping[str, object]) -> int:
 
     with get_connection() as conn:
         _ensure_negotiations_schema(conn)
+        logger.debug("Inserting negotiation record", extra={"record": dict(record)})
         cursor = conn.execute(
             """
             INSERT INTO negotiations (
