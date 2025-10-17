@@ -35,7 +35,9 @@ HTTPS requires a certificate/key pair. You can generate one manually with OpenSS
 The script produces:
 
 - `certs/rootCA.pem`: the CA certificate that clients should trust.
-- `certs/server.crt` (and `certs/server.pem`): the certificate you pass to Uvicorn.
+- `certs/server.crt` (and `certs/server.pem`): the certificate you pass to Uvicorn. It includes Subject Alternative Names for
+  both `localhost` and `127.0.0.1`, so browsers or CLI tools can connect with either host name without triggering a hostname
+  mismatch warning.
 - `certs/server.key` (and `certs/server-key.pem`): the corresponding private key.
 
 If you prefer to generate certificates manually, run:

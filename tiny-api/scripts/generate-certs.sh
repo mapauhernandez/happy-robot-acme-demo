@@ -33,6 +33,8 @@ subjectAltName = @alt_names
 
 [alt_names]
 DNS.1 = ${HOST_NAME}
+DNS.2 = localhost
+IP.1 = 127.0.0.1
 CFG
 
 openssl genrsa -out server.key 2048 >/dev/null 2>&1
