@@ -16,6 +16,46 @@ The SQLite database with sample load data is created automatically the first tim
 It now includes at least one illustrative load for every U.S. state so the matcher always has
 geographically diverse options to choose from.
 
+## Negotiation analytics endpoints
+
+The API can persist outcomes from carrier negotiations via `POST /negotiations`. Supply the
+`X-API-Key` header (defaults to `local-dev-api-key`) along with a JSON body containing the
+following fields:
+
+| Field               | Type   | Details                                                      |
+| ------------------- | ------ | ------------------------------------------------------------ |
+| `load_accepted`     | bool   | Accepts `true`/`false` or their string equivalents.          |
+| `posted_price`      | number | Initial posted rate. Strings such as `"1,500"` are accepted. |
+| `final_price`       | number | Final negotiated rate.                                       |
+| `total_negotiations`| number | Count of negotiation rounds.                                 |
+| `call_sentiment`    | string | Sentiment label (e.g., `"Positive"`).                        |
+| `commodity`         | string | Commodity discussed during the call.                         |
+
+Example request:
+
+```bash
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: local-dev-api-key" \
+  -d '{
+        "load_accepted": "true",
+        "posted_price": "1500",
+        "final_price": "1800",
+        "total_negotiations": "3",
+        "call_sentiment": "Positive",
+        "commodity": "Steel"
+      }' \
+  http://127.0.0.1:8000/negotiations
+```
+
+The endpoint returns the stored record, including a generated `id` and timestamp.
+
+Retrieve all submissions with:
+
+```bash
+curl -H "X-API-Key: local-dev-api-key" http://127.0.0.1:8000/negotiations
+```
+
 ## Running the API
 
 Start the development server with Uvicorn:
@@ -112,3 +152,17 @@ If you generated certificates with `scripts/generate-certs.sh`, mount `certs/ser
 
 The container exposes the same FastAPI application on port `8000`. Adjust `DEMO_API_KEY` to match the credential you
 intend to use for requests.
+
+## Using the dashboard
+
+Navigate to `http://127.0.0.1:8000/dashboard` (or the corresponding host/port for your deployment) to
+open the built-in dashboard. The page allows you to:
+
+- Submit negotiation outcomes through a form that posts to `/negotiations` using the API key stored in
+  browser `localStorage` (default `local-dev-api-key`).
+- Filter charts by accepted versus rejected loads.
+- Review price differences, final prices, negotiation counts, call sentiment, and commodity breakdowns
+  for the recorded data.
+
+Use the gear icon in most browsers' developer tools to update `localStorage.demoApiKey` if you configure
+`DEMO_API_KEY` to a custom value.
