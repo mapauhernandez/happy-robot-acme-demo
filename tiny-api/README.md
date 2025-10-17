@@ -26,7 +26,19 @@ uvicorn app:app --reload
 
 ### Enabling HTTPS locally
 
-HTTPS requires a certificate/key pair. For local work you can generate a self-signed certificate with OpenSSL:
+HTTPS requires a certificate/key pair. You can generate one manually with OpenSSL (shown below) or run the helper script `scripts/generate-certs.sh`, which will create a local certificate authority and sign a server certificate for `localhost` in the `certs/` folder. The script avoids overwriting existing files so you can regenerate the server certificate without losing a trusted CA.
+
+```bash
+./scripts/generate-certs.sh
+```
+
+The script produces:
+
+- `certs/rootCA.pem`: the CA certificate that clients should trust.
+- `certs/server.crt` (and `certs/server.pem`): the certificate you pass to Uvicorn.
+- `certs/server.key` (and `certs/server-key.pem`): the corresponding private key.
+
+If you prefer to generate certificates manually, run:
 
 ```bash
 openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
@@ -50,10 +62,11 @@ curl -X POST \
   -H "Content-Type: application/json" \
   -H "X-API-Key: local-dev-api-key" \
   -d '{"origin": "Austin, TX", "equipment_type": "Dry Van"}' \
-  https://127.0.0.1:8000/loads/match --insecure
+  --cacert certs/rootCA.pem \
+  https://127.0.0.1:8000/loads/match
 ```
 
-The `--insecure` flag lets curl call a self-signed certificate. Remove it once you switch to a trusted certificate.
+Passing `--cacert certs/rootCA.pem` lets `curl` verify the certificate chain produced by the helper script. If you generated a one-off self-signed certificate instead, use `--insecure` while you test locally or import the certificate into your system trust store.
 
 ## Running with Docker
 
@@ -87,6 +100,8 @@ docker run -it --rm -p 8000:8000 \
 
 The container entrypoint automatically adds the correct `--ssl-*` flags to Uvicorn when both variables are supplied.
 If the variables are omitted the server listens over plain HTTP.
+
+If you generated certificates with `scripts/generate-certs.sh`, mount `certs/server.crt` and `certs/server.key` instead and have clients trust `certs/rootCA.pem` (for example, by passing `--cacert certs/rootCA.pem` to curl).
 
 The container exposes the same FastAPI application on port `8000`. Adjust `DEMO_API_KEY` to match the credential you
 intend to use for requests.
