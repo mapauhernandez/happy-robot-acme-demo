@@ -241,6 +241,7 @@ def insert_negotiation(record: Mapping[str, object]) -> int:
     """Insert a negotiation outcome into the database and return its row id."""
 
     with get_connection() as conn:
+        _ensure_negotiations_schema(conn)
         cursor = conn.execute(
             """
             INSERT INTO negotiations (
@@ -271,6 +272,7 @@ def fetch_all_negotiations() -> Iterable[sqlite3.Row]:
     """Return all negotiation rows ordered from newest to oldest."""
 
     with get_connection() as conn:
+        _ensure_negotiations_schema(conn)
         return conn.execute(
             "SELECT * FROM negotiations ORDER BY datetime(created_at) DESC"
         ).fetchall()
