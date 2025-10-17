@@ -131,6 +131,43 @@ def get_connection() -> sqlite3.Connection:
     return conn
 
 
+def _ensure_negotiations_schema(conn: sqlite3.Connection) -> None:
+    """Create or rebuild the negotiations table with the expected columns."""
+
+    expected_columns = {
+        "id",
+        "load_accepted",
+        "posted_price",
+        "final_price",
+        "total_negotiations",
+        "call_sentiment",
+        "commodity",
+        "created_at",
+    }
+    info_rows = conn.execute("PRAGMA table_info(negotiations)").fetchall()
+    existing_columns = {row["name"] for row in info_rows}
+
+    if existing_columns == expected_columns:
+        return
+
+    conn.execute("DROP TABLE IF EXISTS negotiations")
+    conn.execute(
+        """
+        CREATE TABLE negotiations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            load_accepted INTEGER NOT NULL,
+            posted_price REAL NOT NULL,
+            final_price REAL NOT NULL,
+            total_negotiations INTEGER NOT NULL,
+            call_sentiment TEXT NOT NULL,
+            commodity TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.commit()
+
+
 def initialize_database() -> None:
     """Create the loads table and seed it with demo data when empty."""
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -197,21 +234,7 @@ def initialize_database() -> None:
             conn.executemany(insert_query, SEED_LOADS)
             conn.commit()
 
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS negotiations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                load_accepted INTEGER NOT NULL,
-                posted_price REAL NOT NULL,
-                final_price REAL NOT NULL,
-                total_negotiations INTEGER NOT NULL,
-                call_sentiment TEXT NOT NULL,
-                commodity TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            )
-            """
-        )
-        conn.commit()
+        _ensure_negotiations_schema(conn)
 
 
 def insert_negotiation(record: Mapping[str, object]) -> int:
