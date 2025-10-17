@@ -34,10 +34,14 @@ HTTPS requires a certificate/key pair. You can generate one manually with OpenSS
 
 The script produces:
 
-- `certs/rootCA.pem`: the CA certificate that clients should trust.
-- `certs/server.crt` (and `certs/server.pem`): the certificate you pass to Uvicorn. It includes Subject Alternative Names for
-  both `localhost` and `127.0.0.1`, so browsers or CLI tools can connect with either host name without triggering a hostname
-  mismatch warning.
+- `certs/rootCA.pem`: the CA certificate that clients should trust. It is generated with CA-specific extensions so TLS
+  clients recognize it as a certificate authority.
+- `certs/server.crt` (and `certs/server.pem`): the leaf certificate you pass to Uvicorn. It includes Subject Alternative
+  Names for both `localhost` and `127.0.0.1`, so browsers or CLI tools can connect with either host name without
+  triggering a hostname mismatch warning.
+- `certs/server-fullchain.pem`: the leaf certificate followed by the CA certificate. Some servers (and older OpenSSL
+  versions) expect the full chain in the presented certificate file—use this if you see trust errors while the CA is
+  already installed.
 - `certs/server.key` (and `certs/server-key.pem`): the corresponding private key.
 
 If you prefer to generate certificates manually, run:
@@ -52,12 +56,13 @@ Launch Uvicorn with TLS flags so the API is served over `https://`:
 
 ```bash
 uvicorn app:app --host 0.0.0.0 --port 8000 \
-  --ssl-certfile localhost-cert.pem --ssl-keyfile localhost-key.pem
+  --ssl-certfile certs/server-fullchain.pem --ssl-keyfile certs/server.key
 ```
 
-When using HTTPS the API key header requirement is unchanged. By default the demo accepts the value
-`local-dev-api-key`; set the `DEMO_API_KEY` environment variable to customize it. Requests must also provide a JSON
-body containing `origin` and `equipment_type`. Example:
+If you generated certificates with the helper script, point Uvicorn at the bundled chain (`server-fullchain.pem`) so it
+serves both the leaf and CA certificate during the TLS handshake. When using HTTPS the API key header requirement is
+unchanged. By default the demo accepts the value `local-dev-api-key`; set the `DEMO_API_KEY` environment variable to
+customize it. Requests must also provide a JSON body containing `origin` and `equipment_type`. Example:
 
 ```bash
 curl -X POST \
@@ -93,17 +98,17 @@ Mount certificates into the container and point the `start.sh` entrypoint at the
 ```bash
 docker run -it --rm -p 8000:8000 \
   -e DEMO_API_KEY=local-dev-api-key \
-  -e SSL_CERTFILE=/certs/localhost-cert.pem \
-  -e SSL_KEYFILE=/certs/localhost-key.pem \
-  -v $(pwd)/localhost-cert.pem:/certs/localhost-cert.pem:ro \
-  -v $(pwd)/localhost-key.pem:/certs/localhost-key.pem:ro \
+  -e SSL_CERTFILE=/certs/server-fullchain.pem \
+  -e SSL_KEYFILE=/certs/server.key \
+  -v $(pwd)/certs/server-fullchain.pem:/certs/server-fullchain.pem:ro \
+  -v $(pwd)/certs/server.key:/certs/server.key:ro \
   tiny-api
 ```
 
 The container entrypoint automatically adds the correct `--ssl-*` flags to Uvicorn when both variables are supplied.
 If the variables are omitted the server listens over plain HTTP.
 
-If you generated certificates with `scripts/generate-certs.sh`, mount `certs/server.crt` and `certs/server.key` instead and have clients trust `certs/rootCA.pem` (for example, by passing `--cacert certs/rootCA.pem` to curl).
+If you generated certificates with `scripts/generate-certs.sh`, mount `certs/server-fullchain.pem` and `certs/server.key` and have clients trust `certs/rootCA.pem` (for example, by passing `--cacert certs/rootCA.pem` to curl).
 
 The container exposes the same FastAPI application on port `8000`. Adjust `DEMO_API_KEY` to match the credential you
 intend to use for requests.
