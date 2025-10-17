@@ -1,32 +1,19 @@
 """Endpoints for recording and retrieving negotiation outcomes."""
 from __future__ import annotations
 
-import logging
 from datetime import datetime
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from database import fetch_all_negotiations, insert_negotiation
+from logging_utils import get_uvicorn_logger
 from schemas import NegotiationRecord, NegotiationRequest
 from security import verify_api_key
 
 router = APIRouter(prefix="/negotiations", tags=["negotiations"])
 
-
-def _get_logger() -> logging.Logger:
-    """Return a logger wired to uvicorn's console handler."""
-
-    base_logger = logging.getLogger("uvicorn.error")
-    # Fallback to the root logger if uvicorn hasn't set up logging yet.
-    if not base_logger.handlers:
-        base_logger = logging.getLogger()
-    child = base_logger.getChild("negotiations")
-    child.setLevel(logging.INFO)
-    return child
-
-
-logger = _get_logger()
+logger = get_uvicorn_logger("negotiations")
 
 
 @router.post("", response_model=NegotiationRecord, status_code=status.HTTP_201_CREATED)

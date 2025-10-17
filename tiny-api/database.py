@@ -1,27 +1,16 @@
 """Utility helpers for managing the sample loads SQLite database."""
 from __future__ import annotations
 
-import logging
 import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Iterable, List, Mapping
 
+from logging_utils import get_uvicorn_logger
+
 DB_PATH = Path(__file__).resolve().parent / "loads.db"
 
-
-def _get_logger() -> logging.Logger:
-    """Return a logger that shares uvicorn's console handlers."""
-
-    base_logger = logging.getLogger("uvicorn.error")
-    if not base_logger.handlers:
-        base_logger = logging.getLogger()
-    child = base_logger.getChild("database")
-    child.setLevel(logging.INFO)
-    return child
-
-
-logger = _get_logger()
+logger = get_uvicorn_logger("database")
 
 
 STATE_LOAD_DETAILS: List[tuple[str, str, str, str, str]] = [
