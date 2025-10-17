@@ -13,7 +13,20 @@ from security import verify_api_key
 
 router = APIRouter(prefix="/negotiations", tags=["negotiations"])
 
-logger = logging.getLogger(__name__)
+
+def _get_logger() -> logging.Logger:
+    """Return a logger wired to uvicorn's console handler."""
+
+    base_logger = logging.getLogger("uvicorn.error")
+    # Fallback to the root logger if uvicorn hasn't set up logging yet.
+    if not base_logger.handlers:
+        base_logger = logging.getLogger()
+    child = base_logger.getChild("negotiations")
+    child.setLevel(logging.INFO)
+    return child
+
+
+logger = _get_logger()
 
 
 @router.post("", response_model=NegotiationRecord, status_code=status.HTTP_201_CREATED)
@@ -22,7 +35,8 @@ def create_negotiation(
 ) -> NegotiationRecord:
     """Persist a negotiation outcome supplied by the caller."""
 
-    logger.debug("Received negotiation submission", extra={"payload": request.model_dump()})
+    payload = request.model_dump()
+    logger.info("Received negotiation submission", extra={"payload": payload})
 
     created_at = datetime.utcnow().replace(microsecond=0)
     try:
@@ -41,12 +55,17 @@ def create_negotiation(
         logger.exception("Negotiation insert failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to record negotiation",
+            detail=f"Failed to record negotiation: {exc}",
         ) from exc
 
     logger.info(
         "Negotiation stored",
-        extra={"row_id": row_id, "created_at": created_at.isoformat()},
+        extra={
+            "row_id": row_id,
+            "created_at": created_at.isoformat(),
+            "load_accepted": payload["load_accepted"],
+            "final_price": payload["final_price"],
+        },
     )
 
     return NegotiationRecord(id=row_id, created_at=created_at, **request.model_dump())

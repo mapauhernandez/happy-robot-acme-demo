@@ -10,7 +10,18 @@ from typing import Iterable, List, Mapping
 DB_PATH = Path(__file__).resolve().parent / "loads.db"
 
 
-logger = logging.getLogger(__name__)
+def _get_logger() -> logging.Logger:
+    """Return a logger that shares uvicorn's console handlers."""
+
+    base_logger = logging.getLogger("uvicorn.error")
+    if not base_logger.handlers:
+        base_logger = logging.getLogger()
+    child = base_logger.getChild("database")
+    child.setLevel(logging.INFO)
+    return child
+
+
+logger = _get_logger()
 
 
 STATE_LOAD_DETAILS: List[tuple[str, str, str, str, str]] = [
@@ -151,8 +162,9 @@ def _ensure_negotiations_schema(conn: sqlite3.Connection) -> None:
     info_rows = conn.execute("PRAGMA table_info(negotiations)").fetchall()
     existing_columns = {row["name"] for row in info_rows}
 
-    logger.debug(
-        "Negotiations schema check", extra={"existing_columns": sorted(existing_columns)}
+    logger.info(
+        "Negotiations schema check",
+        extra={"existing_columns": sorted(existing_columns), "db_path": str(DB_PATH)},
     )
 
     if existing_columns == expected_columns:
@@ -163,6 +175,7 @@ def _ensure_negotiations_schema(conn: sqlite3.Connection) -> None:
         extra={
             "expected_columns": sorted(expected_columns),
             "existing_columns": sorted(existing_columns),
+            "db_path": str(DB_PATH),
         },
     )
 
@@ -188,6 +201,9 @@ def initialize_database() -> None:
     """Create the loads table and seed it with demo data when empty."""
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     with get_connection() as conn:
+        logger.info(
+            "Initializing database", extra={"db_path": str(DB_PATH), "seed_count": len(SEED_LOADS)}
+        )
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS loads (
@@ -247,6 +263,10 @@ def initialize_database() -> None:
                     :dimensions
                 )
             """
+            logger.info(
+                "Refreshing seed loads",
+                extra={"existing_count": len(existing_ids), "seed_count": len(SEED_LOADS)},
+            )
             conn.executemany(insert_query, SEED_LOADS)
             conn.commit()
 
@@ -258,7 +278,7 @@ def insert_negotiation(record: Mapping[str, object]) -> int:
 
     with get_connection() as conn:
         _ensure_negotiations_schema(conn)
-        logger.debug("Inserting negotiation record", extra={"record": dict(record)})
+        logger.info("Inserting negotiation record", extra={"record": dict(record), "db_path": str(DB_PATH)})
         cursor = conn.execute(
             """
             INSERT INTO negotiations (
@@ -290,9 +310,14 @@ def fetch_all_negotiations() -> Iterable[sqlite3.Row]:
 
     with get_connection() as conn:
         _ensure_negotiations_schema(conn)
-        return conn.execute(
+        rows = conn.execute(
             "SELECT * FROM negotiations ORDER BY datetime(created_at) DESC"
         ).fetchall()
+        logger.info(
+            "Fetched negotiations",
+            extra={"count": len(rows), "db_path": str(DB_PATH)},
+        )
+        return rows
 
 
 def fetch_all_loads() -> List[sqlite3.Row]:
