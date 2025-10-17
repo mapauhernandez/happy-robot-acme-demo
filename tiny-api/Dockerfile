@@ -16,6 +16,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+RUN chmod +x start.sh
+
 EXPOSE 8000
 
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+ENV UVICORN_APP=app:app \
+    UVICORN_HOST=0.0.0.0 \
+    UVICORN_PORT=8000
+
+ENTRYPOINT ["./start.sh"]
