@@ -4,7 +4,7 @@ from __future__ import annotations
 import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import List, Mapping
+from typing import Iterable, List, Mapping
 
 DB_PATH = Path(__file__).resolve().parent / "loads.db"
 
@@ -159,45 +159,98 @@ def initialize_database() -> None:
             row["load_id"] for row in conn.execute("SELECT load_id FROM loads").fetchall()
         }
         seed_ids = {load["load_id"] for load in SEED_LOADS}
-        if existing_ids == seed_ids:
-            return
+        if existing_ids != seed_ids:
+            if existing_ids:
+                conn.execute("DELETE FROM loads")
 
-        if existing_ids:
-            conn.execute("DELETE FROM loads")
+            insert_query = """
+                INSERT INTO loads (
+                    load_id,
+                    origin,
+                    destination,
+                    pickup_datetime,
+                    delivery_datetime,
+                    equipment_type,
+                    loadboard_rate,
+                    notes,
+                    weight,
+                    commodity_type,
+                    num_of_pieces,
+                    miles,
+                    dimensions
+                ) VALUES (
+                    :load_id,
+                    :origin,
+                    :destination,
+                    :pickup_datetime,
+                    :delivery_datetime,
+                    :equipment_type,
+                    :loadboard_rate,
+                    :notes,
+                    :weight,
+                    :commodity_type,
+                    :num_of_pieces,
+                    :miles,
+                    :dimensions
+                )
+            """
+            conn.executemany(insert_query, SEED_LOADS)
+            conn.commit()
 
-        insert_query = """
-            INSERT INTO loads (
-                load_id,
-                origin,
-                destination,
-                pickup_datetime,
-                delivery_datetime,
-                equipment_type,
-                loadboard_rate,
-                notes,
-                weight,
-                commodity_type,
-                num_of_pieces,
-                miles,
-                dimensions
-            ) VALUES (
-                :load_id,
-                :origin,
-                :destination,
-                :pickup_datetime,
-                :delivery_datetime,
-                :equipment_type,
-                :loadboard_rate,
-                :notes,
-                :weight,
-                :commodity_type,
-                :num_of_pieces,
-                :miles,
-                :dimensions
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS negotiations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                load_accepted INTEGER NOT NULL,
+                posted_price REAL NOT NULL,
+                final_price REAL NOT NULL,
+                total_negotiations INTEGER NOT NULL,
+                call_sentiment TEXT NOT NULL,
+                commodity TEXT NOT NULL,
+                created_at TEXT NOT NULL
             )
-        """
-        conn.executemany(insert_query, SEED_LOADS)
+            """
+        )
         conn.commit()
+
+
+def insert_negotiation(record: Mapping[str, object]) -> int:
+    """Insert a negotiation outcome into the database and return its row id."""
+
+    with get_connection() as conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO negotiations (
+                load_accepted,
+                posted_price,
+                final_price,
+                total_negotiations,
+                call_sentiment,
+                commodity,
+                created_at
+            ) VALUES (
+                :load_accepted,
+                :posted_price,
+                :final_price,
+                :total_negotiations,
+                :call_sentiment,
+                :commodity,
+                :created_at
+            )
+            """,
+            record,
+        )
+        conn.commit()
+        return int(cursor.lastrowid)
+
+
+def fetch_all_negotiations() -> Iterable[sqlite3.Row]:
+    """Return all negotiation rows ordered from newest to oldest."""
+
+    with get_connection() as conn:
+        return conn.execute(
+            "SELECT * FROM negotiations ORDER BY datetime(created_at) DESC"
+        ).fetchall()
 
 
 def fetch_all_loads() -> List[sqlite3.Row]:
