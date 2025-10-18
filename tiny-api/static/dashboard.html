@@ -226,6 +226,11 @@
         isFetching: false,
       };
 
+      Chart.defaults.font.family = "'Inter', 'Segoe UI', sans-serif";
+      Chart.defaults.font.size = 14;
+      Chart.defaults.color = "#1f2430";
+      Chart.defaults.plugins.legend.display = false;
+
       const BAR_DATASET_OPTIONS = {
         barThickness: 36,
         maxBarThickness: 48,
@@ -396,6 +401,7 @@
               },
             },
             plugins: {
+              legend: { display: false },
               tooltip: {
                 callbacks: {
                   afterBody(context) {
@@ -442,6 +448,7 @@
               },
             },
             plugins: {
+              legend: { display: false },
               tooltip: {
                 callbacks: {
                   afterBody(context) {
@@ -510,6 +517,7 @@
               },
             },
             plugins: {
+              legend: { display: false },
               tooltip: {
                 callbacks: {
                   afterBody(context) {
@@ -560,6 +568,9 @@
                 title: { display: true, text: "Sentiment" },
               },
             },
+            plugins: {
+              legend: { display: false },
+            },
           },
         });
       }
@@ -594,6 +605,9 @@
               x: {
                 title: { display: true, text: "Commodity" },
               },
+            },
+            plugins: {
+              legend: { display: false },
             },
           },
         });
