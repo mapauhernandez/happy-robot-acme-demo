@@ -75,6 +75,27 @@ curl -X POST \
 
 Passing `--cacert certs/rootCA.pem` lets `curl` verify the certificate chain produced by the helper script. If you generated a one-off self-signed certificate instead, use `--insecure` while you test locally or import the certificate into your system trust store.
 
+### Recording negotiation events
+
+The API also exposes `POST /loads/negotiations` for capturing negotiation analytics that will power a future dashboard. Provide the same `X-API-Key` header and supply the required fields as strings:
+
+```bash
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: local-dev-api-key" \
+  -d '{
+        "load_accepted": "true",
+        "posted_price": "2450",
+        "final_price": "2575",
+        "total_negotiations": "3",
+        "call_sentiment": "positive",
+        "commodity": "Steel"
+      }' \
+  http://127.0.0.1:8000/loads/negotiations
+```
+
+Values are persisted in the `negotiation_events` table within `loads.db`, along with a server-generated UTC timestamp. The data can be queried later to populate a dashboard or analytics workflow.
+
 ## Running with Docker
 
 From this directory you can build the container image and run the API with Docker:

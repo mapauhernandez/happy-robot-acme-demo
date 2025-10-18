@@ -3,13 +3,14 @@ from __future__ import annotations
 
 import os
 import random
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Security, status
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, Field
 
-from database import fetch_all_loads, initialize_database
+from database import fetch_all_loads, initialize_database, record_negotiation_event
 
 app = FastAPI(title="HappyRobot Carrier Demo API")
 
@@ -40,6 +41,21 @@ class CarrierRequest(BaseModel):
 
     origin: str = Field(..., description="Carrier origin in 'City, ST' format")
     equipment_type: str = Field(..., description="Requested equipment type")
+
+
+class NegotiationEventRequest(BaseModel):
+    """Payload describing a single negotiation interaction."""
+
+    load_accepted: str = Field(
+        ..., description="Whether the load was accepted (expected 'true' or 'false')."
+    )
+    posted_price: str = Field(..., description="Initial price shown to the carrier.")
+    final_price: str = Field(..., description="Final agreed price after negotiation.")
+    total_negotiations: str = Field(
+        ..., description="How many negotiation rounds occurred (stringified number)."
+    )
+    call_sentiment: str = Field(..., description="Overall sentiment from the call transcript.")
+    commodity: str = Field(..., description="Commodity associated with the load.")
 
 
 class LoadResponse(BaseModel):
@@ -104,3 +120,26 @@ def match_load(request: CarrierRequest, api_key: str = Depends(verify_api_key)) 
         raise HTTPException(status_code=404, detail="No loads available for the provided origin")
 
     return LoadResponse(**load)
+
+
+@app.post(
+    "/loads/negotiations",
+    status_code=status.HTTP_201_CREATED,
+    summary="Record negotiation insights for dashboard analytics.",
+)
+def log_negotiation_event(
+    payload: NegotiationEventRequest,
+    api_key: str = Depends(verify_api_key),
+) -> Dict[str, str]:
+    """Persist a negotiation event so it can later power a dashboard."""
+
+    normalized = {
+        key: value.strip()
+        for key, value in payload.model_dump().items()
+    }
+    normalized["load_accepted"] = normalized["load_accepted"].lower()
+    normalized["created_at"] = datetime.now(timezone.utc).isoformat()
+
+    record_negotiation_event(normalized)
+
+    return {"message": "Negotiation event recorded."}
