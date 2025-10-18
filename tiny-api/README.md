@@ -94,6 +94,24 @@ curl -X POST \
   http://127.0.0.1:8000/loads/negotiations
 ```
 
+If the API is running with TLS enabled, use the same certificate guidance from the load-matching example and point `curl` at the HTTPS endpoint:
+
+```bash
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: local-dev-api-key" \
+  -d '{
+        "load_accepted": "true",
+        "posted_price": "2450",
+        "final_price": "2575",
+        "total_negotiations": "3",
+        "call_sentiment": "positive",
+        "commodity": "Steel"
+      }' \
+  --cacert certs/rootCA.pem \
+  https://127.0.0.1:8000/loads/negotiations
+```
+
 Values are persisted in the `negotiation_events` table within `loads.db`, along with a server-generated UTC timestamp. The data can be queried later to populate a dashboard or analytics workflow.
 
 ## Running with Docker
