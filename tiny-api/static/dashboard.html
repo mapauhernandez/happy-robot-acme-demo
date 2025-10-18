@@ -123,6 +123,8 @@
         display: flex;
         flex-direction: column;
         width: 100%;
+        max-width: 960px;
+        margin: 0 auto;
       }
 
       .card h2 {
@@ -135,6 +137,8 @@
       canvas {
         width: 100% !important;
         height: 320px !important;
+        max-width: 900px;
+        margin: 0 auto;
       }
 
       .empty-state {
@@ -217,6 +221,12 @@
         rawEvents: [],
         charts: {},
         isFetching: false,
+      };
+
+      const BAR_DATASET_OPTIONS = {
+        barThickness: 36,
+        maxBarThickness: 48,
+        borderRadius: 8,
       };
 
       const differenceBins = [
@@ -367,10 +377,10 @@
             labels: differenceBins.map((bin) => bin.label),
             datasets: [
               {
+                ...BAR_DATASET_OPTIONS,
                 label: "Average difference ($)",
                 data: averages,
                 backgroundColor: "rgba(69, 104, 220, 0.65)",
-                borderRadius: 6,
               },
             ],
           },
@@ -411,10 +421,10 @@
             labels: finalPriceBins.map((bin) => bin.label),
             datasets: [
               {
+                ...BAR_DATASET_OPTIONS,
                 label: "Average final price ($)",
                 data: averages,
                 backgroundColor: "rgba(176, 106, 179, 0.65)",
-                borderRadius: 6,
               },
             ],
           },
@@ -455,6 +465,7 @@
             labels: ["Total rounds"],
             datasets: [
               {
+                ...BAR_DATASET_OPTIONS,
                 label: "Negotiation rounds",
                 data: [totalRounds],
                 backgroundColor: "rgba(76, 201, 240, 0.7)",
@@ -497,10 +508,10 @@
             labels,
             datasets: [
               {
+                ...BAR_DATASET_OPTIONS,
                 label: "Negotiations",
                 data: values,
                 backgroundColor: "rgba(255, 194, 102, 0.75)",
-                borderRadius: 6,
               },
             ],
           },
@@ -532,10 +543,10 @@
             labels,
             datasets: [
               {
+                ...BAR_DATASET_OPTIONS,
                 label: "Negotiations",
                 data: values,
                 backgroundColor: "rgba(120, 224, 143, 0.7)",
-                borderRadius: 6,
               },
             ],
           },
