@@ -8,6 +8,22 @@ from typing import List, Mapping
 
 DB_PATH = Path(__file__).resolve().parent / "loads.db"
 
+# Table used to persist negotiation insights that will later power
+# a lightweight dashboard. Values are stored as TEXT to keep the
+# ingestion flexible (the API currently receives numeric fields as
+# strings and we want to preserve the original payload).
+NEGOTIATION_TABLE_NAME = "negotiation_events"
+NEGOTIATION_COLUMNS = (
+    "id INTEGER PRIMARY KEY AUTOINCREMENT",
+    "load_accepted TEXT NOT NULL",
+    "posted_price TEXT NOT NULL",
+    "final_price TEXT NOT NULL",
+    "total_negotiations TEXT NOT NULL",
+    "call_sentiment TEXT NOT NULL",
+    "commodity TEXT NOT NULL",
+    "created_at TEXT NOT NULL"
+)
+
 
 STATE_LOAD_DETAILS: List[tuple[str, str, str, str, str]] = [
     ("AL", "Birmingham", "Charlotte, NC", "Flatbed", "Steel Beams"),
@@ -154,6 +170,14 @@ def initialize_database() -> None:
             )
             """
         )
+        conn.execute(
+            f"""
+            CREATE TABLE IF NOT EXISTS {NEGOTIATION_TABLE_NAME} (
+                {', '.join(NEGOTIATION_COLUMNS)}
+            )
+            """
+        )
+        conn.commit()
 
         existing_ids = {
             row["load_id"] for row in conn.execute("SELECT load_id FROM loads").fetchall()
@@ -197,6 +221,50 @@ def initialize_database() -> None:
             )
         """
         conn.executemany(insert_query, SEED_LOADS)
+        conn.commit()
+
+
+def record_negotiation_event(payload: Mapping[str, str]) -> None:
+    """Persist a negotiation event so it can be surfaced in dashboards."""
+
+    required_keys = {
+        "load_accepted",
+        "posted_price",
+        "final_price",
+        "total_negotiations",
+        "call_sentiment",
+        "commodity",
+        "created_at",
+    }
+
+    missing_keys = required_keys.difference(payload)
+    if missing_keys:
+        missing_str = ", ".join(sorted(missing_keys))
+        raise ValueError(f"Missing keys for negotiation event: {missing_str}")
+
+    with get_connection() as conn:
+        conn.execute(
+            f"""
+            INSERT INTO {NEGOTIATION_TABLE_NAME} (
+                load_accepted,
+                posted_price,
+                final_price,
+                total_negotiations,
+                call_sentiment,
+                commodity,
+                created_at
+            ) VALUES (
+                :load_accepted,
+                :posted_price,
+                :final_price,
+                :total_negotiations,
+                :call_sentiment,
+                :commodity,
+                :created_at
+            )
+            """,
+            payload,
+        )
         conn.commit()
 
 
