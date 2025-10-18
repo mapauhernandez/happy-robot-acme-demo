@@ -97,7 +97,12 @@ EQUIPMENT_NOTES = {
 def _build_seed_loads() -> List[Mapping[str, object]]:
     """Generate one example load per U.S. state."""
 
-    base_pickup = datetime(2024, 5, 1, 8, 0)
+    now = datetime.utcnow()
+    # Schedule the first pickup for tomorrow at 8:00 AM UTC so the demo data
+    # always appears in the near future.
+    base_pickup = (now + timedelta(days=1)).replace(
+        hour=8, minute=0, second=0, microsecond=0
+    )
     loads: List[Mapping[str, object]] = []
 
     for index, (state, city, destination, equipment, commodity) in enumerate(
