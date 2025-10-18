@@ -215,6 +215,7 @@
       const state = {
         rawEvents: [],
         charts: {},
+        isFetching: false,
       };
 
       const differenceBins = [
@@ -346,10 +347,7 @@
         const context = document.getElementById(canvasId).getContext("2d");
         const existing = state.charts[canvasId];
         if (existing) {
-          existing.data = config.data;
-          existing.options = config.options;
-          existing.update();
-          return existing;
+          existing.destroy();
         }
         const chart = new Chart(context, config);
         state.charts[canvasId] = chart;
@@ -576,35 +574,47 @@
       }
 
       async function fetchEvents() {
+        if (state.isFetching) {
+          return;
+        }
         const apiKey = document.getElementById("apiKey").value.trim();
         if (!apiKey) {
           alert("Please provide an API key.");
           return;
         }
 
-        const response = await fetch("/loads/negotiations", {
-          headers: { "X-API-Key": apiKey },
-        });
+        state.isFetching = true;
+        try {
+          const response = await fetch("/loads/negotiations", {
+            cache: "no-store",
+            headers: { "X-API-Key": apiKey },
+          });
 
-        if (!response.ok) {
-          let message = "Unable to load negotiation data.";
-          try {
-            const error = await response.json();
-            if (error?.detail) {
-              message = Array.isArray(error.detail)
-                ? error.detail.map((item) => item.msg || item).join("\n")
-                : error.detail;
+          if (!response.ok) {
+            let message = "Unable to load negotiation data.";
+            try {
+              const error = await response.json();
+              if (error?.detail) {
+                message = Array.isArray(error.detail)
+                  ? error.detail.map((item) => item.msg || item).join("\n")
+                  : error.detail;
+              }
+            } catch (error) {
+              // ignore parsing errors; fallback to default message
             }
-          } catch (error) {
-            // ignore parsing errors; fallback to default message
+            alert(message);
+            return;
           }
-          alert(message);
-          return;
-        }
 
-        const payload = await response.json();
-        state.rawEvents = Array.isArray(payload) ? payload : [];
-        updateDashboard();
+          const payload = await response.json();
+          state.rawEvents = Array.isArray(payload) ? payload : [];
+          updateDashboard();
+        } catch (error) {
+          console.error("Failed to refresh negotiation data", error);
+          alert("A network error prevented refreshing the dashboard. Please try again.");
+        } finally {
+          state.isFetching = false;
+        }
       }
 
       document.getElementById("refreshButton").addEventListener("click", fetchEvents);
@@ -612,6 +622,9 @@
 
       // Kick off an initial load so the dashboard is populated quickly for local dev.
       fetchEvents();
+
+      // Periodically refresh so the charts stay current when new negotiations are added.
+      setInterval(fetchEvents, 15000);
     </script>
   </body>
 </html>
