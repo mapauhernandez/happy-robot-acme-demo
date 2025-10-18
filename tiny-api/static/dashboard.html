@@ -251,6 +251,29 @@
         borderRadius: 8,
       };
 
+      const SERIES_COLORS = {
+        difference: {
+          primary: "rgba(69, 104, 220, 0.65)",
+          secondary: "rgba(234, 104, 126, 0.7)",
+        },
+        finalPrice: {
+          primary: "rgba(176, 106, 179, 0.65)",
+          secondary: "rgba(104, 182, 214, 0.7)",
+        },
+        negotiationRounds: {
+          primary: "rgba(76, 201, 240, 0.7)",
+          secondary: "rgba(255, 150, 102, 0.75)",
+        },
+        sentiment: {
+          primary: "rgba(255, 194, 102, 0.75)",
+          secondary: "rgba(141, 174, 255, 0.7)",
+        },
+        commodity: {
+          primary: "rgba(120, 224, 143, 0.7)",
+          secondary: "rgba(245, 163, 174, 0.7)",
+        },
+      };
+
       const differenceBins = [
         {
           label: "$0",
@@ -317,8 +340,12 @@
         },
       ];
 
+      function getActiveFilter() {
+        return document.getElementById("loadFilter").value;
+      }
+
       function getFilteredEvents() {
-        const filter = document.getElementById("loadFilter").value;
+        const filter = getActiveFilter();
         if (filter === "accepted") {
           return state.rawEvents.filter((event) => event.load_accepted);
         }
@@ -326,6 +353,55 @@
           return state.rawEvents.filter((event) => !event.load_accepted);
         }
         return state.rawEvents;
+      }
+
+      function splitEventsByAcceptance(events) {
+        const groups = { accepted: [], rejected: [] };
+        events.forEach((event) => {
+          if (event.load_accepted) {
+            groups.accepted.push(event);
+          } else {
+            groups.rejected.push(event);
+          }
+        });
+        return groups;
+      }
+
+      function countBy(events, selector) {
+        const counts = new Map();
+        events.forEach((event) => {
+          const key = selector(event);
+          counts.set(key, (counts.get(key) || 0) + 1);
+        });
+        return counts;
+      }
+
+      function buildNegotiationSeries(events) {
+        const labels = ["0", "1", "2", "3"];
+        const counts = labels.map(() => 0);
+        let hasOverflow = false;
+
+        events.forEach((event) => {
+          const rounds = Number(event.total_negotiations);
+          if (!Number.isFinite(rounds) || rounds < 0) {
+            return;
+          }
+
+          const bucket = Math.round(rounds);
+          if (bucket >= 3) {
+            counts[3] += 1;
+            if (bucket > 3) {
+              hasOverflow = true;
+            }
+            return;
+          }
+
+          if (bucket >= 0) {
+            counts[bucket] += 1;
+          }
+        });
+
+        return { counts, hasOverflow };
       }
 
       function bucketize(values, bins) {
@@ -376,21 +452,52 @@
       }
 
       function renderDifferenceChart(events) {
-        const differences = events.map((event) => event.final_price - event.posted_price);
-        const buckets = bucketize(differences, differenceBins);
-        const counts = buckets.map((entry) => entry.count);
+        const filter = getActiveFilter();
+        const { accepted, rejected } = splitEventsByAcceptance(events);
+
+        const datasetSources =
+          filter === "all"
+            ? [
+                {
+                  label: "Load accepted",
+                  color: SERIES_COLORS.difference.primary,
+                  aggregates: bucketize(
+                    accepted.map((event) => event.final_price - event.posted_price),
+                    differenceBins,
+                  ),
+                },
+                {
+                  label: "Load not accepted",
+                  color: SERIES_COLORS.difference.secondary,
+                  aggregates: bucketize(
+                    rejected.map((event) => event.final_price - event.posted_price),
+                    differenceBins,
+                  ),
+                },
+              ]
+            : [
+                {
+                  label: "Total number of calls",
+                  color: SERIES_COLORS.difference.primary,
+                  aggregates: bucketize(
+                    events.map((event) => event.final_price - event.posted_price),
+                    differenceBins,
+                  ),
+                },
+              ];
+
+        const tooltipAggregates = datasetSources.map((dataset) => dataset.aggregates);
+
         return renderChart("differenceChart", {
           type: "bar",
           data: {
             labels: differenceBins.map((bin) => bin.label),
-            datasets: [
-              {
-                ...BAR_DATASET_OPTIONS,
-                label: "Total number of calls",
-                data: counts,
-                backgroundColor: "rgba(69, 104, 220, 0.65)",
-              },
-            ],
+            datasets: datasetSources.map((dataset) => ({
+              ...BAR_DATASET_OPTIONS,
+              label: dataset.label,
+              data: dataset.aggregates.map((entry) => entry.count),
+              backgroundColor: dataset.color,
+            })),
           },
           options: {
             scales: {
@@ -403,12 +510,19 @@
               },
             },
             plugins: {
-              legend: { display: false },
+              legend: { display: filter === "all" },
               tooltip: {
                 callbacks: {
                   afterBody(context) {
-                    const index = context[0].dataIndex;
-                    const { count, sum } = buckets[index];
+                    if (context.length === 0) {
+                      return "";
+                    }
+                    const { datasetIndex, dataIndex } = context[0];
+                    const aggregates = tooltipAggregates[datasetIndex];
+                    if (!aggregates || !aggregates[dataIndex]) {
+                      return "";
+                    }
+                    const { count, sum } = aggregates[dataIndex];
                     if (count === 0) {
                       return "No calls in this range";
                     }
@@ -423,21 +537,52 @@
       }
 
       function renderFinalPriceChart(events) {
-        const finalPrices = events.map((event) => event.final_price);
-        const buckets = bucketize(finalPrices, finalPriceBins);
-        const counts = buckets.map((entry) => entry.count);
+        const filter = getActiveFilter();
+        const { accepted, rejected } = splitEventsByAcceptance(events);
+
+        const datasetSources =
+          filter === "all"
+            ? [
+                {
+                  label: "Load accepted",
+                  color: SERIES_COLORS.finalPrice.primary,
+                  aggregates: bucketize(
+                    accepted.map((event) => event.final_price),
+                    finalPriceBins,
+                  ),
+                },
+                {
+                  label: "Load not accepted",
+                  color: SERIES_COLORS.finalPrice.secondary,
+                  aggregates: bucketize(
+                    rejected.map((event) => event.final_price),
+                    finalPriceBins,
+                  ),
+                },
+              ]
+            : [
+                {
+                  label: "Total number of calls",
+                  color: SERIES_COLORS.finalPrice.primary,
+                  aggregates: bucketize(
+                    events.map((event) => event.final_price),
+                    finalPriceBins,
+                  ),
+                },
+              ];
+
+        const tooltipAggregates = datasetSources.map((dataset) => dataset.aggregates);
+
         return renderChart("finalPriceChart", {
           type: "bar",
           data: {
             labels: finalPriceBins.map((bin) => bin.label),
-            datasets: [
-              {
-                ...BAR_DATASET_OPTIONS,
-                label: "Total number of calls",
-                data: counts,
-                backgroundColor: "rgba(176, 106, 179, 0.65)",
-              },
-            ],
+            datasets: datasetSources.map((dataset) => ({
+              ...BAR_DATASET_OPTIONS,
+              label: dataset.label,
+              data: dataset.aggregates.map((entry) => entry.count),
+              backgroundColor: dataset.color,
+            })),
           },
           options: {
             scales: {
@@ -450,12 +595,19 @@
               },
             },
             plugins: {
-              legend: { display: false },
+              legend: { display: filter === "all" },
               tooltip: {
                 callbacks: {
                   afterBody(context) {
-                    const index = context[0].dataIndex;
-                    const { count, sum } = buckets[index];
+                    if (context.length === 0) {
+                      return "";
+                    }
+                    const { datasetIndex, dataIndex } = context[0];
+                    const aggregates = tooltipAggregates[datasetIndex];
+                    if (!aggregates || !aggregates[dataIndex]) {
+                      return "";
+                    }
+                    const { count, sum } = aggregates[dataIndex];
                     if (count === 0) {
                       return "No calls in this range";
                     }
@@ -470,43 +622,45 @@
       }
 
       function renderNegotiationCountChart(events) {
+        const filter = getActiveFilter();
+        const { accepted, rejected } = splitEventsByAcceptance(events);
         const labels = ["0", "1", "2", "3"];
-        const counts = labels.map(() => 0);
-        let hasOverflow = false;
 
-        events.forEach((event) => {
-          const rounds = Number(event.total_negotiations);
-          if (!Number.isFinite(rounds) || rounds < 0) {
-            return;
-          }
+        const datasetSources =
+          filter === "all"
+            ? [
+                {
+                  label: "Load accepted",
+                  color: SERIES_COLORS.negotiationRounds.primary,
+                  series: buildNegotiationSeries(accepted),
+                },
+                {
+                  label: "Load not accepted",
+                  color: SERIES_COLORS.negotiationRounds.secondary,
+                  series: buildNegotiationSeries(rejected),
+                },
+              ]
+            : [
+                {
+                  label: "Total number of calls",
+                  color: SERIES_COLORS.negotiationRounds.primary,
+                  series: buildNegotiationSeries(events),
+                },
+              ];
 
-          const bucket = Math.round(rounds);
-          if (bucket >= 3) {
-            counts[3] += 1;
-            if (bucket > 3) {
-              hasOverflow = true;
-            }
-            return;
-          }
-
-          if (bucket >= 0) {
-            counts[bucket] += 1;
-          }
-        });
+        const overflowFlags = datasetSources.map((dataset) => dataset.series.hasOverflow);
 
         return renderChart("negotiationCountChart", {
           type: "bar",
           data: {
             labels,
-            datasets: [
-              {
-                ...BAR_DATASET_OPTIONS,
-                label: "Total number of calls",
-                data: counts,
-                backgroundColor: "rgba(76, 201, 240, 0.7)",
-                borderRadius: 10,
-              },
-            ],
+            datasets: datasetSources.map((dataset) => ({
+              ...BAR_DATASET_OPTIONS,
+              label: dataset.label,
+              data: dataset.series.counts,
+              backgroundColor: dataset.color,
+              borderRadius: 10,
+            })),
           },
           options: {
             scales: {
@@ -519,15 +673,15 @@
               },
             },
             plugins: {
-              legend: { display: false },
+              legend: { display: filter === "all" },
               tooltip: {
                 callbacks: {
                   afterBody(context) {
                     if (context.length === 0) {
                       return "";
                     }
-                    const index = context[0].dataIndex;
-                    if (index === 3 && hasOverflow) {
+                    const { datasetIndex, dataIndex } = context[0];
+                    if (dataIndex === 3 && overflowFlags[datasetIndex]) {
                       return "Includes calls with three or more rounds";
                     }
                     return "";
@@ -540,25 +694,48 @@
       }
 
       function renderSentimentChart(events) {
-        const sentimentCounts = new Map();
-        events.forEach((event) => {
-          const key = event.call_sentiment || "unknown";
-          sentimentCounts.set(key, (sentimentCounts.get(key) || 0) + 1);
-        });
-        const labels = Array.from(sentimentCounts.keys()).sort();
-        const values = labels.map((label) => sentimentCounts.get(label));
+        const filter = getActiveFilter();
+        const { accepted, rejected } = splitEventsByAcceptance(events);
+
+        const buildSentimentCounts = (collection) =>
+          countBy(collection, (event) => event.call_sentiment || "unknown");
+
+        const datasetSources =
+          filter === "all"
+            ? [
+                {
+                  label: "Load accepted",
+                  color: SERIES_COLORS.sentiment.primary,
+                  counts: buildSentimentCounts(accepted),
+                },
+                {
+                  label: "Load not accepted",
+                  color: SERIES_COLORS.sentiment.secondary,
+                  counts: buildSentimentCounts(rejected),
+                },
+              ]
+            : [
+                {
+                  label: "Total number of calls",
+                  color: SERIES_COLORS.sentiment.primary,
+                  counts: buildSentimentCounts(events),
+                },
+              ];
+
+        const labels = Array.from(
+          new Set(datasetSources.flatMap((dataset) => Array.from(dataset.counts.keys()))),
+        ).sort((a, b) => a.localeCompare(b));
+
         return renderChart("sentimentChart", {
           type: "bar",
           data: {
             labels,
-            datasets: [
-              {
-                ...BAR_DATASET_OPTIONS,
-                label: "Total number of calls",
-                data: values,
-                backgroundColor: "rgba(255, 194, 102, 0.75)",
-              },
-            ],
+            datasets: datasetSources.map((dataset) => ({
+              ...BAR_DATASET_OPTIONS,
+              label: dataset.label,
+              data: labels.map((label) => dataset.counts.get(label) || 0),
+              backgroundColor: dataset.color,
+            })),
           },
           options: {
             scales: {
@@ -571,32 +748,55 @@
               },
             },
             plugins: {
-              legend: { display: false },
+              legend: { display: filter === "all" },
             },
           },
         });
       }
 
       function renderCommodityChart(events) {
-        const commodityCounts = new Map();
-        events.forEach((event) => {
-          const key = event.commodity || "Unknown";
-          commodityCounts.set(key, (commodityCounts.get(key) || 0) + 1);
-        });
-        const labels = Array.from(commodityCounts.keys()).sort((a, b) => a.localeCompare(b));
-        const values = labels.map((label) => commodityCounts.get(label));
+        const filter = getActiveFilter();
+        const { accepted, rejected } = splitEventsByAcceptance(events);
+
+        const buildCommodityCounts = (collection) =>
+          countBy(collection, (event) => event.commodity || "Unknown");
+
+        const datasetSources =
+          filter === "all"
+            ? [
+                {
+                  label: "Load accepted",
+                  color: SERIES_COLORS.commodity.primary,
+                  counts: buildCommodityCounts(accepted),
+                },
+                {
+                  label: "Load not accepted",
+                  color: SERIES_COLORS.commodity.secondary,
+                  counts: buildCommodityCounts(rejected),
+                },
+              ]
+            : [
+                {
+                  label: "Total number of calls",
+                  color: SERIES_COLORS.commodity.primary,
+                  counts: buildCommodityCounts(events),
+                },
+              ];
+
+        const labels = Array.from(
+          new Set(datasetSources.flatMap((dataset) => Array.from(dataset.counts.keys()))),
+        ).sort((a, b) => a.localeCompare(b));
+
         return renderChart("commodityChart", {
           type: "bar",
           data: {
             labels,
-            datasets: [
-              {
-                ...BAR_DATASET_OPTIONS,
-                label: "Total number of calls",
-                data: values,
-                backgroundColor: "rgba(120, 224, 143, 0.7)",
-              },
-            ],
+            datasets: datasetSources.map((dataset) => ({
+              ...BAR_DATASET_OPTIONS,
+              label: dataset.label,
+              data: labels.map((label) => dataset.counts.get(label) || 0),
+              backgroundColor: dataset.color,
+            })),
           },
           options: {
             scales: {
@@ -609,7 +809,7 @@
               },
             },
             plugins: {
-              legend: { display: false },
+              legend: { display: filter === "all" },
             },
           },
         });
