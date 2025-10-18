@@ -199,8 +199,11 @@
           <canvas id="finalPriceChart" aria-label="Bar chart showing the distribution of final prices"></canvas>
         </article>
         <article class="card">
-          <h2>Total number of negotiations</h2>
-          <canvas id="negotiationCountChart" aria-label="Bar chart showing the total number of negotiation rounds"></canvas>
+          <h2>Total back and forth negotiations</h2>
+          <canvas
+            id="negotiationCountChart"
+            aria-label="Bar chart showing call counts by number of negotiation rounds"
+          ></canvas>
         </article>
         <article class="card">
           <h2>Call sentiment</h2>
@@ -368,9 +371,7 @@
       function renderDifferenceChart(events) {
         const differences = events.map((event) => event.final_price - event.posted_price);
         const buckets = bucketize(differences, differenceBins);
-        const averages = buckets.map((entry) =>
-          entry.count === 0 ? 0 : entry.sum / entry.count
-        );
+        const counts = buckets.map((entry) => entry.count);
         return renderChart("differenceChart", {
           type: "bar",
           data: {
@@ -378,8 +379,8 @@
             datasets: [
               {
                 ...BAR_DATASET_OPTIONS,
-                label: "Average difference ($)",
-                data: averages,
+                label: "Total number of calls",
+                data: counts,
                 backgroundColor: "rgba(69, 104, 220, 0.65)",
               },
             ],
@@ -388,7 +389,7 @@
             scales: {
               y: {
                 beginAtZero: true,
-                title: { display: true, text: "Dollars" },
+                title: { display: true, text: "Total number of calls" },
               },
               x: {
                 title: { display: true, text: "Price difference buckets" },
@@ -399,8 +400,12 @@
                 callbacks: {
                   afterBody(context) {
                     const index = context[0].dataIndex;
-                    const { count } = buckets[index];
-                    return `Negotiations: ${count}`;
+                    const { count, sum } = buckets[index];
+                    if (count === 0) {
+                      return "No calls in this range";
+                    }
+                    const average = sum / count;
+                    return `Average difference: $${average.toFixed(2)}`;
                   },
                 },
               },
@@ -412,9 +417,7 @@
       function renderFinalPriceChart(events) {
         const finalPrices = events.map((event) => event.final_price);
         const buckets = bucketize(finalPrices, finalPriceBins);
-        const averages = buckets.map((entry) =>
-          entry.count === 0 ? 0 : entry.sum / entry.count
-        );
+        const counts = buckets.map((entry) => entry.count);
         return renderChart("finalPriceChart", {
           type: "bar",
           data: {
@@ -422,8 +425,8 @@
             datasets: [
               {
                 ...BAR_DATASET_OPTIONS,
-                label: "Average final price ($)",
-                data: averages,
+                label: "Total number of calls",
+                data: counts,
                 backgroundColor: "rgba(176, 106, 179, 0.65)",
               },
             ],
@@ -432,7 +435,7 @@
             scales: {
               y: {
                 beginAtZero: true,
-                title: { display: true, text: "Dollars" },
+                title: { display: true, text: "Total number of calls" },
               },
               x: {
                 title: { display: true, text: "Final price buckets" },
@@ -443,8 +446,12 @@
                 callbacks: {
                   afterBody(context) {
                     const index = context[0].dataIndex;
-                    const { count } = buckets[index];
-                    return `Negotiations: ${count}`;
+                    const { count, sum } = buckets[index];
+                    if (count === 0) {
+                      return "No calls in this range";
+                    }
+                    const average = sum / count;
+                    return `Average final price: $${average.toFixed(2)}`;
                   },
                 },
               },
@@ -454,38 +461,66 @@
       }
 
       function renderNegotiationCountChart(events) {
-        const totalRounds = events.reduce((sum, event) => {
+        const labels = ["0", "1", "2", "3"];
+        const counts = labels.map(() => 0);
+        let hasOverflow = false;
+
+        events.forEach((event) => {
           const rounds = Number(event.total_negotiations);
-          return Number.isFinite(rounds) ? sum + rounds : sum;
-        }, 0);
-        const negotiationCount = events.length;
+          if (!Number.isFinite(rounds) || rounds < 0) {
+            return;
+          }
+
+          const bucket = Math.round(rounds);
+          if (bucket >= 3) {
+            counts[3] += 1;
+            if (bucket > 3) {
+              hasOverflow = true;
+            }
+            return;
+          }
+
+          if (bucket >= 0) {
+            counts[bucket] += 1;
+          }
+        });
+
         return renderChart("negotiationCountChart", {
           type: "bar",
           data: {
-            labels: ["Total rounds"],
+            labels,
             datasets: [
               {
                 ...BAR_DATASET_OPTIONS,
-                label: "Negotiation rounds",
-                data: [totalRounds],
+                label: "Total number of calls",
+                data: counts,
                 backgroundColor: "rgba(76, 201, 240, 0.7)",
                 borderRadius: 10,
               },
             ],
           },
           options: {
-            indexAxis: "y",
             scales: {
-              x: {
+              y: {
                 beginAtZero: true,
-                title: { display: true, text: "Rounds" },
+                title: { display: true, text: "Total number of calls" },
+              },
+              x: {
+                title: { display: true, text: "Back-and-forth negotiations" },
               },
             },
             plugins: {
               tooltip: {
                 callbacks: {
-                  afterBody() {
-                    return `Negotiations recorded: ${negotiationCount}`;
+                  afterBody(context) {
+                    if (context.length === 0) {
+                      return "";
+                    }
+                    const index = context[0].dataIndex;
+                    if (index === 3 && hasOverflow) {
+                      return "Includes calls with three or more rounds";
+                    }
+                    return "";
                   },
                 },
               },
@@ -509,7 +544,7 @@
             datasets: [
               {
                 ...BAR_DATASET_OPTIONS,
-                label: "Negotiations",
+                label: "Total number of calls",
                 data: values,
                 backgroundColor: "rgba(255, 194, 102, 0.75)",
               },
@@ -519,7 +554,7 @@
             scales: {
               y: {
                 beginAtZero: true,
-                title: { display: true, text: "Negotiations" },
+                title: { display: true, text: "Total number of calls" },
               },
               x: {
                 title: { display: true, text: "Sentiment" },
@@ -544,7 +579,7 @@
             datasets: [
               {
                 ...BAR_DATASET_OPTIONS,
-                label: "Negotiations",
+                label: "Total number of calls",
                 data: values,
                 backgroundColor: "rgba(120, 224, 143, 0.7)",
               },
@@ -554,7 +589,7 @@
             scales: {
               y: {
                 beginAtZero: true,
-                title: { display: true, text: "Negotiations" },
+                title: { display: true, text: "Total number of calls" },
               },
               x: {
                 title: { display: true, text: "Commodity" },
