@@ -114,6 +114,16 @@ curl -X POST \
 
 Values are persisted in the `negotiation_events` table within `loads.db`, along with a server-generated UTC timestamp. The data can be queried later to populate a dashboard or analytics workflow.
 
+### Viewing the negotiation dashboard
+
+Run the FastAPI server (for example with `uvicorn app:app --reload`) and navigate to [`http://127.0.0.1:8000/dashboard`](http://127.0.0.1:8000/dashboard). The page loads a lightweight Chart.js dashboard that visualizes negotiation trends recorded through the API. Provide your API key in the field at the top of the page—by default the demo expects `local-dev-api-key`, which is already pre-filled for local development. Once authenticated, you can:
+
+- Toggle between all negotiations, only accepted loads, or only declined loads.
+- Review bar charts showing the average price differences, average final prices, and the total number of negotiation rounds.
+- See sentiment distribution and commodity mix for the selected subset of negotiations.
+
+The dashboard retrieves normalized data from the authenticated `GET /loads/negotiations` endpoint, so it automatically reflects new negotiation events as soon as you record them.
+
 ## Running with Docker
 
 From this directory you can build the container image and run the API with Docker:

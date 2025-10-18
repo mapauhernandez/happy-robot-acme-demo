@@ -268,6 +268,16 @@ def record_negotiation_event(payload: Mapping[str, str]) -> None:
         conn.commit()
 
 
+def fetch_negotiation_events() -> List[sqlite3.Row]:
+    """Return every recorded negotiation event ordered by creation time."""
+
+    with get_connection() as conn:
+        rows = conn.execute(
+            f"SELECT * FROM {NEGOTIATION_TABLE_NAME} ORDER BY created_at ASC"
+        ).fetchall()
+    return rows
+
+
 def fetch_all_loads() -> List[sqlite3.Row]:
     """Return every load from the database."""
     with get_connection() as conn:

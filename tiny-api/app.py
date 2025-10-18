@@ -4,13 +4,21 @@ from __future__ import annotations
 import os
 import random
 from datetime import datetime, timezone
+from functools import lru_cache
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Security, status
+from fastapi.responses import HTMLResponse
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, Field
 
-from database import fetch_all_loads, initialize_database, record_negotiation_event
+from database import (
+    fetch_all_loads,
+    fetch_negotiation_events,
+    initialize_database,
+    record_negotiation_event,
+)
 
 app = FastAPI(title="HappyRobot Carrier Demo API")
 
@@ -56,6 +64,18 @@ class NegotiationEventRequest(BaseModel):
     )
     call_sentiment: str = Field(..., description="Overall sentiment from the call transcript.")
     commodity: str = Field(..., description="Commodity associated with the load.")
+
+
+class NegotiationEvent(BaseModel):
+    """Normalized negotiation event returned to dashboard clients."""
+
+    load_accepted: bool
+    posted_price: float
+    final_price: float
+    total_negotiations: int
+    call_sentiment: str
+    commodity: str
+    created_at: str
 
 
 class LoadResponse(BaseModel):
@@ -143,3 +163,68 @@ def log_negotiation_event(
     record_negotiation_event(normalized)
 
     return {"message": "Negotiation event recorded."}
+
+
+def _as_bool(value: str) -> bool:
+    return value.strip().lower() in {"true", "1", "yes", "y"}
+
+
+def _as_float(value: str) -> Optional[float]:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _as_int(value: str) -> Optional[int]:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+@app.get("/loads/negotiations", response_model=List[NegotiationEvent])
+def list_negotiation_events(
+    api_key: str = Depends(verify_api_key),
+) -> List[NegotiationEvent]:
+    """Return the negotiation history with normalized types."""
+
+    events: List[NegotiationEvent] = []
+    for row in fetch_negotiation_events():
+        posted_price = _as_float(row["posted_price"])
+        final_price = _as_float(row["final_price"])
+        total_negotiations = _as_int(row["total_negotiations"])
+
+        if posted_price is None or final_price is None or total_negotiations is None:
+            # Skip rows that cannot be safely represented in the response schema.
+            continue
+
+        events.append(
+            NegotiationEvent(
+                load_accepted=_as_bool(row["load_accepted"]),
+                posted_price=posted_price,
+                final_price=final_price,
+                total_negotiations=total_negotiations,
+                call_sentiment=row["call_sentiment"],
+                commodity=row["commodity"],
+                created_at=row["created_at"],
+            )
+        )
+
+    return events
+
+
+BASE_DIR = Path(__file__).resolve().parent
+
+
+@lru_cache()
+def _dashboard_html() -> str:
+    dashboard_path = BASE_DIR / "static" / "dashboard.html"
+    return dashboard_path.read_text(encoding="utf-8")
+
+
+@app.get("/dashboard", response_class=HTMLResponse, include_in_schema=False)
+def dashboard() -> HTMLResponse:
+    """Serve the lightweight negotiation analytics dashboard."""
+
+    return HTMLResponse(content=_dashboard_html())
