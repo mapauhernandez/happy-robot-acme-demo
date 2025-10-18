@@ -253,28 +253,16 @@
 
       const differenceBins = [
         {
-          label: "≤ -$200",
-          min: Number.NEGATIVE_INFINITY,
-          max: -200,
+          label: "$0",
+          min: 0,
+          minInclusive: true,
+          max: 0,
           maxInclusive: true,
         },
         {
-          label: "-$199 to -$101",
-          min: -200,
-          minInclusive: false,
-          max: -100,
-          maxInclusive: false,
-        },
-        {
-          label: "-$100 to -$1",
-          min: -100,
-          max: 0,
-          maxInclusive: false,
-        },
-        {
-          label: "$0 to $99",
+          label: "$1 to $99",
           min: 0,
-          minInclusive: true,
+          minInclusive: false,
           max: 100,
           maxInclusive: false,
         },
