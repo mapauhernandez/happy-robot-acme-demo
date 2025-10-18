@@ -611,7 +611,11 @@
           updateDashboard();
         } catch (error) {
           console.error("Failed to refresh negotiation data", error);
-          alert("A network error prevented refreshing the dashboard. Please try again.");
+          const reason =
+            error instanceof Error ? error.message : typeof error === "string" ? error : "Unknown error";
+          alert(
+            `Unable to refresh negotiation data. Please confirm the API server is reachable and try again.\n\nDetails: ${reason}`,
+          );
         } finally {
           state.isFetching = false;
         }
