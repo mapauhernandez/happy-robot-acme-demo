@@ -6,7 +6,7 @@ import random
 from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from fastapi import Depends, FastAPI, HTTPException, Security, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -63,12 +63,16 @@ class CarrierRequest(BaseModel):
 class NegotiationEventRequest(BaseModel):
     """Payload describing a single negotiation interaction."""
 
-    load_accepted: str = Field(
+    load_accepted: Union[str, bool] = Field(
         ..., description="Whether the load was accepted (expected 'true' or 'false')."
     )
-    posted_price: str = Field(..., description="Initial price shown to the carrier.")
-    final_price: str = Field(..., description="Final agreed price after negotiation.")
-    total_negotiations: str = Field(
+    posted_price: Union[str, float, int] = Field(
+        ..., description="Initial price shown to the carrier."
+    )
+    final_price: Union[str, float, int] = Field(
+        ..., description="Final agreed price after negotiation."
+    )
+    total_negotiations: Union[str, int] = Field(
         ..., description="How many negotiation rounds occurred (stringified number)."
     )
     call_sentiment: str = Field(..., description="Overall sentiment from the call transcript.")
@@ -162,10 +166,15 @@ def log_negotiation_event(
 ) -> Dict[str, str]:
     """Persist a negotiation event so it can later power a dashboard."""
 
-    normalized = {
-        key: value.strip()
-        for key, value in payload.model_dump().items()
-    }
+    normalized = {}
+    for key, value in payload.model_dump().items():
+        if isinstance(value, str):
+            normalized[key] = value.strip()
+        elif isinstance(value, bool):
+            normalized[key] = "true" if value else "false"
+        else:
+            normalized[key] = str(value)
+
     normalized["load_accepted"] = normalized["load_accepted"].lower()
     normalized["created_at"] = datetime.now(timezone.utc).isoformat()
 
