@@ -6,7 +6,7 @@ import random
 from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from fastapi import Depends, FastAPI, HTTPException, Security, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -63,16 +63,16 @@ class CarrierRequest(BaseModel):
 class NegotiationEventRequest(BaseModel):
     """Payload describing a single negotiation interaction."""
 
-    load_accepted: str | bool = Field(
+    load_accepted: Union[str, bool] = Field(
         ..., description="Whether the load was accepted (expected 'true' or 'false')."
     )
-    posted_price: str | float | int = Field(
+    posted_price: Union[str, float, int] = Field(
         ..., description="Initial price shown to the carrier."
     )
-    final_price: str | float | int = Field(
+    final_price: Union[str, float, int] = Field(
         ..., description="Final agreed price after negotiation."
     )
-    total_negotiations: str | int = Field(
+    total_negotiations: Union[str, int] = Field(
         ..., description="How many negotiation rounds occurred (stringified number)."
     )
     call_sentiment: str = Field(..., description="Overall sentiment from the call transcript.")
