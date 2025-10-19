@@ -9,4 +9,5 @@ cd tiny-api
 ```
 
 From there you can follow the full setup and usage guide in
-[tiny-api/README.md](tiny-api/README.md).
+[tiny-api/README.md](tiny-api/README.md), including instructions for launching the negotiation
+dashboard served at `/dashboard`.

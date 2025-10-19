@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HappyRobot Negotiation Dashboard</title>
+    <link
+      rel="preconnect"
+      href="https://fonts.googleapis.com"
+    />
+    <link
+      rel="preconnect"
+      href="https://fonts.gstatic.com"
+      crossorigin
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          sans-serif;
+        background: #f5f7fb;
+        color: #1c1f26;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: radial-gradient(circle at 0% 0%, #f6f8ff, #eef1f7 45%, #ffffff 100%);
+      }
+
+      header {
+        padding: 2rem 1.5rem 1rem;
+        text-align: center;
+      }
+
+      header h1 {
+        margin: 0;
+        font-size: 2.2rem;
+        font-weight: 600;
+      }
+
+      header p {
+        margin: 0.75rem auto 0;
+        max-width: 720px;
+        color: #4a5260;
+      }
+
+      main {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 0 1.5rem 3rem;
+      }
+
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        align-items: flex-end;
+        margin-bottom: 2rem;
+        background: rgba(255, 255, 255, 0.85);
+        border-radius: 16px;
+        padding: 1.25rem;
+        box-shadow: 0 12px 30px rgba(82, 90, 124, 0.1);
+      }
+
+      .control-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+        min-width: 200px;
+      }
+
+      label {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: #3b4252;
+      }
+
+      input,
+      select {
+        font-size: 1rem;
+        padding: 0.55rem 0.75rem;
+        border-radius: 8px;
+        border: 1px solid #cdd4e1;
+        background: white;
+        box-shadow: none;
+        color: #1c1f26;
+      }
+
+      select {
+        appearance: none;
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        background-color: #ffffff;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='none' stroke='%235666f5' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m1 1 5 5 5-5'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 0.75rem center;
+        background-size: 12px;
+        padding-right: 2.5rem;
+      }
+
+      button {
+        align-self: flex-start;
+        padding: 0.6rem 1.2rem;
+        border-radius: 8px;
+        border: none;
+        background: #5666f5;
+        color: white;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+        box-shadow: 0 10px 20px rgba(69, 104, 220, 0.22);
+      }
+
+      button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 12px 24px rgba(69, 104, 220, 0.28);
+      }
+
+      .grid {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+      }
+
+      .card {
+        background: rgba(255, 255, 255, 0.92);
+        border-radius: 20px;
+        padding: 1.5rem;
+        box-shadow: 0 14px 35px rgba(82, 90, 124, 0.12);
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        max-width: 780px;
+        margin: 0 auto;
+      }
+
+      .card h2 {
+        margin-top: 0;
+        margin-bottom: 0.75rem;
+        font-size: 1.35rem;
+        color: #1f2430;
+        text-align: center;
+      }
+
+      canvas {
+        width: 100% !important;
+        height: 320px !important;
+        max-width: 720px;
+        margin: 0 auto;
+      }
+
+      .empty-state {
+        font-style: italic;
+        color: #6b7280;
+        text-align: center;
+        padding: 1rem 0;
+      }
+
+      @media (max-width: 600px) {
+        header h1 {
+          font-size: 1.75rem;
+        }
+
+        canvas {
+          height: 260px !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Negotiation Insights Dashboard</h1>
+      <p>
+        Explore negotiation performance using data captured by the HappyRobot demo API.
+        Use the controls below to authenticate with your API key and focus on accepted
+        or declined loads.
+      </p>
+    </header>
+    <main>
+      <section class="controls">
+        <div class="control-group">
+          <label for="apiKey">API key</label>
+          <input
+            id="apiKey"
+            type="text"
+            value="local-dev-api-key"
+            autocomplete="off"
+          />
+        </div>
+        <div class="control-group">
+          <label for="loadFilter">Load selection</label>
+          <select id="loadFilter">
+            <option value="all">All negotiations</option>
+            <option value="accepted">Accepted loads only</option>
+            <option value="rejected">Not accepted loads</option>
+          </select>
+        </div>
+        <button id="refreshButton" type="button">Refresh data</button>
+      </section>
+      <section id="dashboard" class="grid" hidden>
+        <article class="card">
+          <h2>Difference between posted price and final offer</h2>
+          <canvas id="differenceChart" aria-label="Bar chart showing the distribution of price differences"></canvas>
+        </article>
+        <article class="card">
+          <h2>Final price</h2>
+          <canvas id="finalPriceChart" aria-label="Bar chart showing the distribution of final prices"></canvas>
+        </article>
+        <article class="card">
+          <h2>Total back and forth negotiations</h2>
+          <canvas
+            id="negotiationCountChart"
+            aria-label="Bar chart showing call counts by number of negotiation rounds"
+          ></canvas>
+        </article>
+        <article class="card">
+          <h2>Call sentiment</h2>
+          <canvas id="sentimentChart" aria-label="Bar chart showing sentiment counts"></canvas>
+        </article>
+        <article class="card">
+          <h2>Commodities</h2>
+          <canvas id="commodityChart" aria-label="Bar chart showing commodity counts"></canvas>
+        </article>
+      </section>
+      <p id="emptyState" class="empty-state" hidden>
+        No negotiation events found. Submit data to <code>/loads/negotiations</code> and refresh.
+      </p>
+    </main>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" crossorigin="anonymous"></script>
+    <script>
+      const state = {
+        rawEvents: [],
+        charts: {},
+        isFetching: false,
+      };
+
+      Chart.defaults.font.family = "'Inter', 'Segoe UI', sans-serif";
+      Chart.defaults.font.size = 14;
+      Chart.defaults.color = "#1f2430";
+      Chart.defaults.plugins.legend.display = false;
+
+      const BAR_DATASET_OPTIONS = {
+        barThickness: 36,
+        maxBarThickness: 48,
+        borderRadius: 8,
+      };
+
+      const SERIES_COLORS = {
+        difference: {
+          primary: "rgba(69, 104, 220, 0.65)",
+          secondary: "rgba(234, 104, 126, 0.7)",
+        },
+        finalPrice: {
+          primary: "rgba(176, 106, 179, 0.65)",
+          secondary: "rgba(104, 182, 214, 0.7)",
+        },
+        negotiationRounds: {
+          primary: "rgba(76, 201, 240, 0.7)",
+          secondary: "rgba(255, 150, 102, 0.75)",
+        },
+        sentiment: {
+          primary: "rgba(255, 194, 102, 0.75)",
+          secondary: "rgba(141, 174, 255, 0.7)",
+        },
+        commodity: {
+          primary: "rgba(120, 224, 143, 0.7)",
+          secondary: "rgba(245, 163, 174, 0.7)",
+        },
+      };
+
+      const differenceBins = [
+        {
+          label: "$0",
+          min: 0,
+          minInclusive: true,
+          max: 0,
+          maxInclusive: true,
+        },
+        {
+          label: "$1 to $99",
+          min: 0,
+          minInclusive: false,
+          max: 100,
+          maxInclusive: false,
+        },
+        {
+          label: "$100 to $199",
+          min: 100,
+          minInclusive: true,
+          max: 200,
+          maxInclusive: false,
+        },
+        {
+          label: "≥ $200",
+          min: 200,
+          minInclusive: true,
+          max: Number.POSITIVE_INFINITY,
+        },
+      ];
+
+      const finalPriceBins = [
+        {
+          label: "< $1k",
+          min: Number.NEGATIVE_INFINITY,
+          max: 1000,
+          maxInclusive: false,
+        },
+        {
+          label: "$1k–$1.9k",
+          min: 1000,
+          minInclusive: true,
+          max: 2000,
+          maxInclusive: false,
+        },
+        {
+          label: "$2k–$2.9k",
+          min: 2000,
+          minInclusive: true,
+          max: 3000,
+          maxInclusive: false,
+        },
+        {
+          label: "$3k–$3.9k",
+          min: 3000,
+          minInclusive: true,
+          max: 4000,
+          maxInclusive: false,
+        },
+        {
+          label: "≥ $4k",
+          min: 4000,
+          minInclusive: true,
+          max: Number.POSITIVE_INFINITY,
+        },
+      ];
+
+      function getActiveFilter() {
+        return document.getElementById("loadFilter").value;
+      }
+
+      function getFilteredEvents() {
+        const filter = getActiveFilter();
+        if (filter === "accepted") {
+          return state.rawEvents.filter((event) => event.load_accepted);
+        }
+        if (filter === "rejected") {
+          return state.rawEvents.filter((event) => !event.load_accepted);
+        }
+        return state.rawEvents;
+      }
+
+      function splitEventsByAcceptance(events) {
+        const groups = { accepted: [], rejected: [] };
+        events.forEach((event) => {
+          if (event.load_accepted) {
+            groups.accepted.push(event);
+          } else {
+            groups.rejected.push(event);
+          }
+        });
+        return groups;
+      }
+
+      function countBy(events, selector) {
+        const counts = new Map();
+        events.forEach((event) => {
+          const key = selector(event);
+          counts.set(key, (counts.get(key) || 0) + 1);
+        });
+        return counts;
+      }
+
+      function buildNegotiationSeries(events) {
+        const labels = ["0", "1", "2", "3"];
+        const counts = labels.map(() => 0);
+        let hasOverflow = false;
+
+        events.forEach((event) => {
+          const rounds = Number(event.total_negotiations);
+          if (!Number.isFinite(rounds) || rounds < 0) {
+            return;
+          }
+
+          const bucket = Math.round(rounds);
+          if (bucket >= 3) {
+            counts[3] += 1;
+            if (bucket > 3) {
+              hasOverflow = true;
+            }
+            return;
+          }
+
+          if (bucket >= 0) {
+            counts[bucket] += 1;
+          }
+        });
+
+        return { counts, hasOverflow };
+      }
+
+      function bucketize(values, bins) {
+        const aggregates = bins.map(() => ({ count: 0, sum: 0 }));
+        for (const value of values) {
+          if (Number.isNaN(value)) {
+            continue;
+          }
+          for (let index = 0; index < bins.length; index += 1) {
+            const bin = bins[index];
+            const min = bin.min ?? Number.NEGATIVE_INFINITY;
+            const max = bin.max ?? Number.POSITIVE_INFINITY;
+            const minInclusive = bin.minInclusive ?? (min === Number.NEGATIVE_INFINITY);
+            const maxInclusive = bin.maxInclusive ?? (max === Number.POSITIVE_INFINITY);
+
+            const meetsMin =
+              min === Number.NEGATIVE_INFINITY
+                ? true
+                : minInclusive
+                ? value >= min
+                : value > min;
+            const meetsMax =
+              max === Number.POSITIVE_INFINITY
+                ? true
+                : maxInclusive
+                ? value <= max
+                : value < max;
+
+            if (meetsMin && meetsMax) {
+              aggregates[index].count += 1;
+              aggregates[index].sum += value;
+              break;
+            }
+          }
+        }
+        return aggregates;
+      }
+
+      function renderChart(canvasId, config) {
+        const context = document.getElementById(canvasId).getContext("2d");
+        const existing = state.charts[canvasId];
+        if (existing) {
+          existing.destroy();
+        }
+        const chart = new Chart(context, config);
+        state.charts[canvasId] = chart;
+        return chart;
+      }
+
+      function renderDifferenceChart(events) {
+        const filter = getActiveFilter();
+        const { accepted, rejected } = splitEventsByAcceptance(events);
+
+        const datasetSources =
+          filter === "all"
+            ? [
+                {
+                  label: "Load accepted",
+                  color: SERIES_COLORS.difference.primary,
+                  aggregates: bucketize(
+                    accepted.map((event) => event.final_price - event.posted_price),
+                    differenceBins,
+                  ),
+                },
+                {
+                  label: "Load not accepted",
+                  color: SERIES_COLORS.difference.secondary,
+                  aggregates: bucketize(
+                    rejected.map((event) => event.final_price - event.posted_price),
+                    differenceBins,
+                  ),
+                },
+              ]
+            : [
+                {
+                  label: "Total number of calls",
+                  color: SERIES_COLORS.difference.primary,
+                  aggregates: bucketize(
+                    events.map((event) => event.final_price - event.posted_price),
+                    differenceBins,
+                  ),
+                },
+              ];
+
+        const tooltipAggregates = datasetSources.map((dataset) => dataset.aggregates);
+
+        return renderChart("differenceChart", {
+          type: "bar",
+          data: {
+            labels: differenceBins.map((bin) => bin.label),
+            datasets: datasetSources.map((dataset) => ({
+              ...BAR_DATASET_OPTIONS,
+              label: dataset.label,
+              data: dataset.aggregates.map((entry) => entry.count),
+              backgroundColor: dataset.color,
+            })),
+          },
+          options: {
+            scales: {
+              y: {
+                beginAtZero: true,
+                title: { display: true, text: "Total number of calls" },
+              },
+              x: {
+                title: { display: true, text: "Price difference buckets" },
+              },
+            },
+            plugins: {
+              legend: { display: filter === "all" },
+              tooltip: {
+                callbacks: {
+                  afterBody(context) {
+                    if (context.length === 0) {
+                      return "";
+                    }
+                    const { datasetIndex, dataIndex } = context[0];
+                    const aggregates = tooltipAggregates[datasetIndex];
+                    if (!aggregates || !aggregates[dataIndex]) {
+                      return "";
+                    }
+                    const { count, sum } = aggregates[dataIndex];
+                    if (count === 0) {
+                      return "No calls in this range";
+                    }
+                    const average = sum / count;
+                    return `Average difference: $${average.toFixed(2)}`;
+                  },
+                },
+              },
+            },
+          },
+        });
+      }
+
+      function renderFinalPriceChart(events) {
+        const filter = getActiveFilter();
+        const { accepted, rejected } = splitEventsByAcceptance(events);
+
+        const datasetSources =
+          filter === "all"
+            ? [
+                {
+                  label: "Load accepted",
+                  color: SERIES_COLORS.finalPrice.primary,
+                  aggregates: bucketize(
+                    accepted.map((event) => event.final_price),
+                    finalPriceBins,
+                  ),
+                },
+                {
+                  label: "Load not accepted",
+                  color: SERIES_COLORS.finalPrice.secondary,
+                  aggregates: bucketize(
+                    rejected.map((event) => event.final_price),
+                    finalPriceBins,
+                  ),
+                },
+              ]
+            : [
+                {
+                  label: "Total number of calls",
+                  color: SERIES_COLORS.finalPrice.primary,
+                  aggregates: bucketize(
+                    events.map((event) => event.final_price),
+                    finalPriceBins,
+                  ),
+                },
+              ];
+
+        const tooltipAggregates = datasetSources.map((dataset) => dataset.aggregates);
+
+        return renderChart("finalPriceChart", {
+          type: "bar",
+          data: {
+            labels: finalPriceBins.map((bin) => bin.label),
+            datasets: datasetSources.map((dataset) => ({
+              ...BAR_DATASET_OPTIONS,
+              label: dataset.label,
+              data: dataset.aggregates.map((entry) => entry.count),
+              backgroundColor: dataset.color,
+            })),
+          },
+          options: {
+            scales: {
+              y: {
+                beginAtZero: true,
+                title: { display: true, text: "Total number of calls" },
+              },
+              x: {
+                title: { display: true, text: "Final price buckets" },
+              },
+            },
+            plugins: {
+              legend: { display: filter === "all" },
+              tooltip: {
+                callbacks: {
+                  afterBody(context) {
+                    if (context.length === 0) {
+                      return "";
+                    }
+                    const { datasetIndex, dataIndex } = context[0];
+                    const aggregates = tooltipAggregates[datasetIndex];
+                    if (!aggregates || !aggregates[dataIndex]) {
+                      return "";
+                    }
+                    const { count, sum } = aggregates[dataIndex];
+                    if (count === 0) {
+                      return "No calls in this range";
+                    }
+                    const average = sum / count;
+                    return `Average final price: $${average.toFixed(2)}`;
+                  },
+                },
+              },
+            },
+          },
+        });
+      }
+
+      function renderNegotiationCountChart(events) {
+        const filter = getActiveFilter();
+        const { accepted, rejected } = splitEventsByAcceptance(events);
+        const labels = ["0", "1", "2", "3"];
+
+        const datasetSources =
+          filter === "all"
+            ? [
+                {
+                  label: "Load accepted",
+                  color: SERIES_COLORS.negotiationRounds.primary,
+                  series: buildNegotiationSeries(accepted),
+                },
+                {
+                  label: "Load not accepted",
+                  color: SERIES_COLORS.negotiationRounds.secondary,
+                  series: buildNegotiationSeries(rejected),
+                },
+              ]
+            : [
+                {
+                  label: "Total number of calls",
+                  color: SERIES_COLORS.negotiationRounds.primary,
+                  series: buildNegotiationSeries(events),
+                },
+              ];
+
+        const overflowFlags = datasetSources.map((dataset) => dataset.series.hasOverflow);
+
+        return renderChart("negotiationCountChart", {
+          type: "bar",
+          data: {
+            labels,
+            datasets: datasetSources.map((dataset) => ({
+              ...BAR_DATASET_OPTIONS,
+              label: dataset.label,
+              data: dataset.series.counts,
+              backgroundColor: dataset.color,
+              borderRadius: 10,
+            })),
+          },
+          options: {
+            scales: {
+              y: {
+                beginAtZero: true,
+                title: { display: true, text: "Total number of calls" },
+              },
+              x: {
+                title: { display: true, text: "Back-and-forth negotiations" },
+              },
+            },
+            plugins: {
+              legend: { display: filter === "all" },
+              tooltip: {
+                callbacks: {
+                  afterBody(context) {
+                    if (context.length === 0) {
+                      return "";
+                    }
+                    const { datasetIndex, dataIndex } = context[0];
+                    if (dataIndex === 3 && overflowFlags[datasetIndex]) {
+                      return "Includes calls with three or more rounds";
+                    }
+                    return "";
+                  },
+                },
+              },
+            },
+          },
+        });
+      }
+
+      function renderSentimentChart(events) {
+        const filter = getActiveFilter();
+        const { accepted, rejected } = splitEventsByAcceptance(events);
+
+        const buildSentimentCounts = (collection) =>
+          countBy(collection, (event) => event.call_sentiment || "unknown");
+
+        const datasetSources =
+          filter === "all"
+            ? [
+                {
+                  label: "Load accepted",
+                  color: SERIES_COLORS.sentiment.primary,
+                  counts: buildSentimentCounts(accepted),
+                },
+                {
+                  label: "Load not accepted",
+                  color: SERIES_COLORS.sentiment.secondary,
+                  counts: buildSentimentCounts(rejected),
+                },
+              ]
+            : [
+                {
+                  label: "Total number of calls",
+                  color: SERIES_COLORS.sentiment.primary,
+                  counts: buildSentimentCounts(events),
+                },
+              ];
+
+        const labels = Array.from(
+          new Set(datasetSources.flatMap((dataset) => Array.from(dataset.counts.keys()))),
+        ).sort((a, b) => a.localeCompare(b));
+
+        return renderChart("sentimentChart", {
+          type: "bar",
+          data: {
+            labels,
+            datasets: datasetSources.map((dataset) => ({
+              ...BAR_DATASET_OPTIONS,
+              label: dataset.label,
+              data: labels.map((label) => dataset.counts.get(label) || 0),
+              backgroundColor: dataset.color,
+            })),
+          },
+          options: {
+            scales: {
+              y: {
+                beginAtZero: true,
+                title: { display: true, text: "Total number of calls" },
+              },
+              x: {
+                title: { display: true, text: "Sentiment" },
+              },
+            },
+            plugins: {
+              legend: { display: filter === "all" },
+            },
+          },
+        });
+      }
+
+      function renderCommodityChart(events) {
+        const filter = getActiveFilter();
+        const { accepted, rejected } = splitEventsByAcceptance(events);
+
+        const buildCommodityCounts = (collection) =>
+          countBy(collection, (event) => event.commodity || "Unknown");
+
+        const datasetSources =
+          filter === "all"
+            ? [
+                {
+                  label: "Load accepted",
+                  color: SERIES_COLORS.commodity.primary,
+                  counts: buildCommodityCounts(accepted),
+                },
+                {
+                  label: "Load not accepted",
+                  color: SERIES_COLORS.commodity.secondary,
+                  counts: buildCommodityCounts(rejected),
+                },
+              ]
+            : [
+                {
+                  label: "Total number of calls",
+                  color: SERIES_COLORS.commodity.primary,
+                  counts: buildCommodityCounts(events),
+                },
+              ];
+
+        const labels = Array.from(
+          new Set(datasetSources.flatMap((dataset) => Array.from(dataset.counts.keys()))),
+        ).sort((a, b) => a.localeCompare(b));
+
+        return renderChart("commodityChart", {
+          type: "bar",
+          data: {
+            labels,
+            datasets: datasetSources.map((dataset) => ({
+              ...BAR_DATASET_OPTIONS,
+              label: dataset.label,
+              data: labels.map((label) => dataset.counts.get(label) || 0),
+              backgroundColor: dataset.color,
+            })),
+          },
+          options: {
+            scales: {
+              y: {
+                beginAtZero: true,
+                title: { display: true, text: "Total number of calls" },
+              },
+              x: {
+                title: { display: true, text: "Commodity" },
+              },
+            },
+            plugins: {
+              legend: { display: filter === "all" },
+            },
+          },
+        });
+      }
+
+      function updateDashboard() {
+        const events = getFilteredEvents();
+        const dashboard = document.getElementById("dashboard");
+        const emptyState = document.getElementById("emptyState");
+
+        if (state.rawEvents.length === 0) {
+          dashboard.hidden = true;
+          emptyState.hidden = false;
+          return;
+        }
+
+        emptyState.hidden = true;
+        dashboard.hidden = false;
+
+        renderDifferenceChart(events);
+        renderFinalPriceChart(events);
+        renderNegotiationCountChart(events);
+        renderSentimentChart(events);
+        renderCommodityChart(events);
+      }
+
+      async function fetchEvents() {
+        if (state.isFetching) {
+          return;
+        }
+        const apiKey = document.getElementById("apiKey").value.trim();
+        if (!apiKey) {
+          alert("Please provide an API key.");
+          return;
+        }
+
+        state.isFetching = true;
+        try {
+          const response = await fetch("/loads/negotiations", {
+            cache: "no-store",
+            headers: { "X-API-Key": apiKey },
+          });
+
+          if (!response.ok) {
+            let message = "Unable to load negotiation data.";
+            try {
+              const error = await response.json();
+              if (error?.detail) {
+                message = Array.isArray(error.detail)
+                  ? error.detail.map((item) => item.msg || item).join("\n")
+                  : error.detail;
+              }
+            } catch (error) {
+              // ignore parsing errors; fallback to default message
+            }
+            alert(message);
+            return;
+          }
+
+          const payload = await response.json();
+          state.rawEvents = Array.isArray(payload) ? payload : [];
+          updateDashboard();
+        } catch (error) {
+          console.error("Failed to refresh negotiation data", error);
+          const reason =
+            error instanceof Error ? error.message : typeof error === "string" ? error : "Unknown error";
+          alert(
+            `Unable to refresh negotiation data. Please confirm the API server is reachable and try again.\n\nDetails: ${reason}`,
+          );
+        } finally {
+          state.isFetching = false;
+        }
+      }
+
+      document.getElementById("refreshButton").addEventListener("click", fetchEvents);
+      document.getElementById("loadFilter").addEventListener("change", updateDashboard);
+
+      // Kick off an initial load so the dashboard is populated quickly for local dev.
+      fetchEvents();
+
+      // Periodically refresh so the charts stay current when new negotiations are added.
+      setInterval(fetchEvents, 15000);
+    </script>
+  </body>
+</html>
